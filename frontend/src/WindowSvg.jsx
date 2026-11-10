@@ -71,7 +71,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const body = [], grips = [], dimsV = [], dimsH = [], secPanes = [], colInfo = []
   const series = +(engine && engine.series) || +((/(\d+)\s*series/i.exec((item.system || '') + ' ' + (item.name || '')) || [])[1]) || 62
   const meshOn = (D.mesh || 0) > 0 || !!(item.mesh && item.mesh !== 'No mesh'), lanes = D.kind === 'sliding' ? (meshOn ? 3 : (D.panels || 2) > 2 || series >= 80 ? 3 : 2) : undefined
-  const sp = Math.min(.8, 58 / trackSpec(series, lanes).depth), sp2 = Math.min(1.1, 62 / Math.max(profMm(codes.frame, 62), profMm(codes.sash, 60)))
+  const sp = k * 1.6, sp2 = k * 1.6 // true scale (like the demo): profile mm x drawing scale
   let num = 0
   const sel = (i) => onSelect ? { style: { cursor: onCell ? 'crosshair' : 'pointer' }, onClick: (ev) => { onSelect(i); if (onCell) { const r = ev.currentTarget.getBoundingClientRect(); onCell(i, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height) } } } : {}
   const gb = (x, y, ww, hh) => D.georgian ? <g stroke="#94a3b8" strokeWidth="1.2">{[1, 2].map(j => <line key={'v' + j} x1={x + ww * j / 3} x2={x + ww * j / 3} y1={y} y2={y + hh} />)}{[1, 2].map(j => <line key={'h' + j} y1={y + hh * j / 3} y2={y + hh * j / 3} x1={x} x2={x + ww} />)}</g> : null
@@ -203,10 +203,10 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       {body}
       {grips}
       {dimEls}
-      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}><PanZoom w={64} h={h} label={() => setBig(true)}>{vSec(h, sp2, sp)}</PanZoom>
+      {dims && !D.bay && <g transform={`translate(${ox - 86},${oy})`}><PanZoom w={56} h={h} label={() => setBig(true)}>{vSec(h, sp2, sp)}</PanZoom>
         <text transform="rotate(-90)" x={-h / 2 + 8} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'IN' : 'OUT'}</text><text transform="rotate(-90)" x={-h / 2 - 22} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'OUT' : 'IN'}</text></g>}
-      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}><PanZoom w={w} h={64}>{hSec(w, sp2, sp)}</PanZoom>
-        <text x={w + 8} y="8" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'IN' : 'OUT'}</text><text x={w + 8} y="36" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'OUT' : 'IN'}</text></g>}
+      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 44})`}><PanZoom w={w} h={56}>{hSec(w, sp2, sp)}</PanZoom>
+        <text x={w + 8} y="8" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'IN' : 'OUT'}</text><text x={w + 8} y="40" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'OUT' : 'IN'}</text></g>}
       {big && createPortal(<div className="sec-back" onMouseDown={e => e.target === e.currentTarget && setBig(false)}><div className="sec-big"><div className="sec-bh"><b>Cross-sections · {item.mark}</b><span className="muted">Drag to move · scroll or +/− to zoom · double-click to reset</span><button className="x" onClick={() => setBig(false)} aria-label="Close">✕</button></div>
         <div className="sec-cols"><div><div className="sec-t">Vertical section B–B</div><svg viewBox="-20 -20 190 560" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={150} h={520}>{vSec(520, 1.1, 1.0)}</PanZoom></svg></div>
           <div><div className="sec-t">Horizontal section A–A</div><svg viewBox="-20 -20 880 200" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={840} h={160}>{hSec(840, 1.1, 1.0)}</PanZoom></svg></div></div></div></div>, document.body)}
