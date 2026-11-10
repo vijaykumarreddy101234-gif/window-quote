@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "{backend/**,frontend/dist/**}",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ]
+}

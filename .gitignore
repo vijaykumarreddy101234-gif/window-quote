@@ -1,5 +1,5 @@
 node_modules/
+.DS_Store
+fenestra.db
 *.db-wal
 *.db-shm
-fenestra.db
-.DS_Store

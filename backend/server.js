@@ -5,7 +5,12 @@ const Database = require('better-sqlite3');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'fenestra.db'));
+let DBFILE = path.join(__dirname, 'fenestra.db');
+if (process.env.VERCEL) { // serverless: writable disk is /tmp only; start from the bundled demo data
+  const fs0 = require('fs'); DBFILE = '/tmp/fenestra.db';
+  if (!fs0.existsSync(DBFILE) && fs0.existsSync(path.join(__dirname, 'seed.db'))) fs0.copyFileSync(path.join(__dirname, 'seed.db'), DBFILE);
+}
+const db = new Database(DBFILE);
 db.pragma('journal_mode = WAL');
 
 db.exec(`
@@ -906,4 +911,5 @@ app.use('/api/v1/app', api);
 const dist = path.join(__dirname, '..', 'frontend', 'dist');
 if (require('fs').existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html'))); }
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log('FenstraWorks API on :' + PORT));
+if (!process.env.VERCEL) app.listen(PORT, () => console.log('FenstraWorks API on :' + PORT));
+module.exports = app;
