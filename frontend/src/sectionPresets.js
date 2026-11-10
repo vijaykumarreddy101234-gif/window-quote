@@ -9,20 +9,22 @@ const lane = 49.9
 
 // sliding (premium / eco); returns { v:{parts,glass}, h:{parts,glass} } in preset coordinates
 function sliding(kind, c) {
-  const { sash, bead, il, frame } = c, mesh = c.mesh ? 'RSM-53M' : null, mull = null, sw = Math.round((PDIM[sash] || [59])[0]), bw = beadW(bead), withMesh = !!mesh
+  const { sash, bead, il, frame } = c, mesh = c.mesh ? (PDIM[c.mesh] ? c.mesh : (kind === 'eco' && frame === 'RST-95ET' ? sash : 'RSM-53M')) : null, meshIsSash = /^RSS-/.test(mesh || ''), mull = null, sw = Math.round((PDIM[sash] || [59])[0]), bw = beadW(bead), withMesh = !!mesh
   if (kind === 'premium') {
     const y1 = 27.05 - bw, gy = { 24.5: -2.92, 17.5: 0.6, 11.5: 3.55 }[bw] ?? (y1 - 5.47), bx = 42.01 + sw - 22.02
     const v = [['frame', frame, 90, 0, 1, 0, 0], ['sash@1', sash, 0, 0, 1, 42.01, 27.05], ['sash@2', sash, 0, 0, 1, 42.01, 76.95], ['bead@1', bead, 90, 0, 1, bx, y1], ['bead@2', bead, 90, 0, 1, bx, y1 + lane]]
     const h = [['frame', frame, 90, 0, 1, -300, 0], ['sash@1', sash, 0, 1, 1, sw + 2.5, 27.05], ['sash@2', sash, 0, 0, 1, 0, 76.95], ['bead@1', bead, 90, 0, 0, 24.5, y1], ['bead@2', bead, 90, 0, 1, sw - 22.02, y1 + lane], ['interlock@1', il || 'RSI-44IL', 90, 0, 1, sw - 24.62, -11.06], ['interlock@2', il || 'RSI-44IL', 90, 1, 0, 27.12, 73.05]]
-    if (withMesh) { v.push(['mesh_sash@3', mesh, 0, 0, 1, 42.02, 102.37]); h.push(['mesh_sash@3', mesh, 0, 0, 1, sw + 42.5, 102.37]); if (mull) { v.push(['mullion', mull, 90, 0, 0, 69.04, 80.33]); h.push(['mullion', mull, 90, 0, 0, sw + 69.52, 80.33]) } }
-    return { v: { parts: v, glass: [bx + 1.98, gy, 1, 0, 30, bw < 12 ? 24 : 5], lane, meshY: 102.37 }, h: { parts: h, glass: [sw - 20.03, gy + lane, 1, 0, 30, bw < 12 ? 24 : 5], lane, meshY: 102.37 } }
+    let meshY = 102.37
+    if (withMesh && meshIsSash) { meshY = 76.95 + lane; const mw = Math.round((PDIM[mesh] || [59])[0]); v.push(['mesh_sash@3', mesh, 0, 0, 1, 42.01, meshY], ['mesh_bead@3', bead, 90, 0, 1, 42.01 + mw - 22.02, y1 + 2 * lane]); h.push(['mesh_sash@3', mesh, 0, 0, 1, sw + 42.5, meshY], ['mesh_bead@3', bead, 90, 0, 1, sw + 42.5 + mw - 22.02, y1 + 2 * lane]) }
+    else if (withMesh) { v.push(['mesh_sash@3', mesh, 0, 0, 1, 42.02, 102.37]); h.push(['mesh_sash@3', mesh, 0, 0, 1, sw + 42.5, 102.37]) }
+    return { v: { parts: v, glass: [bx + 1.98, gy, 1, 0, 30, bw < 12 ? 24 : 5], lane, meshY, meshIsSash }, h: { parts: h, glass: [sw - 20.03, gy + lane, 1, 0, 30, bw < 12 ? 24 : 5], lane, meshY, meshIsSash } }
   }
   // eco
   const y1 = 23.04 - bw, gy = bw > 12 ? -0.24 : 3.13, sx = frame === 'RST-53ET' ? 39.47 : 37.02, bx = sx + 38.15, thk = bw > 12 ? 5 : 12, my = frame === 'RST-95ET' ? 106.95 : 90.38
   const v = [['frame', frame, 90, 0, 1, 0, 0], ['sash@1', sash, 0, 0, 1, sx, 23.04], ['sash@2', sash, 0, 0, 1, sx, 64.98], ['bead@1', bead, 90, 0, 1, bx, y1], ['bead@2', bead, 90, 0, 1, bx, y1 + 41.94]]
   const h = [['frame', frame, 90, 0, 1, -300, 0], ['sash@1', sash, 0, 1, 1, 62.5, 23.04], ['sash@2', sash, 0, 0, 1, 0, 64.98], ['bead@1', bead, 90, 0, 0, 24.32, y1], ['bead@2', bead, 90, 0, 1, 38.18, y1 + 41.94], ['interlock@1', il || 'RSI-38EIL', 90, 0, 1, 31.49, -9.27], ['interlock@2', il || 'RSI-38EIL', 90, 1, 0, 31.01, 62.27]]
-  if (withMesh) { v.push(['mesh_sash@3', mesh, 0, 0, 1, sx, my]); h.push(['mesh_sash@3', mesh, 0, 0, 1, 102.5, my]) }
-  return { v: { parts: v, glass: [bx + 1.79, gy, 1, 0, 30, thk], lane: 41.94, meshY: my }, h: { parts: h, glass: [39.96, gy + 41.94, 1, 0, 30, thk], lane: 41.94, meshY: my } }
+  if (withMesh) { v.push(['mesh_sash@3', mesh, 0, 0, 1, sx, my]); h.push(['mesh_sash@3', mesh, 0, 0, 1, 102.5, my]); if (meshIsSash) { v.push(['mesh_bead@3', bead, 90, 0, 1, bx, y1 + 2 * 41.94]); h.push(['mesh_bead@3', bead, 90, 0, 1, 102.5 + 38.18, y1 + 2 * 41.94]) } }
+  return { v: { parts: v, glass: [bx + 1.79, gy, 1, 0, 30, thk], lane: 41.94, meshY: my, meshIsSash }, h: { parts: h, glass: [39.96, gy + 41.94, 1, 0, 30, thk], lane: 41.94, meshY: my, meshIsSash } }
 }
 
 // casement (single lane): frame + sash + bead

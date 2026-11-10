@@ -8,6 +8,7 @@ import { profileImg } from '../profileImg'
 import { buildDxf, parseDxf } from '../dxf.mjs'
 import { saveBlob } from '../api'
 import { say } from '../dialog'
+import { DesignAssist } from '../DesignAssist'
 import { TEMPLATES, GALLERY, GROUPS, badge, WINDOW_COLORS, HW_FINISH, SHAPES } from '../templates'
 
 const LEFT = ['designs', 'divide', 'shapes', 'colors'], RIGHT = ['inspect', 'hardware', 'glazing', 'pricing']
@@ -178,6 +179,7 @@ export default function Designer() {
         {tool === 'inspect' && <Sheet title="Inspect this window" onClose={close}>
           <button className="opt" onClick={() => setNoteOpen(!noteOpen)}>＋ Add note</button>
           {noteOpen && <input className="note" placeholder="Type a note for this window" value={note} onChange={ev => setNote(ev.target.value)} />}
+          <DesignAssist dsn={dsn} size={size} engine={e} glassName={glassName} />
           {dsn.kind === 'sliding' ? (() => {
             const n = dsn.panels || 2, W0 = size[0], ctr = n === 3 && !!(dsn.centre || dsn.mesh), leaf = sel != null && sel < n && !(ctr && sel === 1) ? sel : null, nm = i => ctr ? ['S1', 'F1', 'S2'][i] : (dsn.mesh && i >= n - dsn.mesh ? 'M' + (i + 1 - (n - dsn.mesh)) : 'S' + (i + 1))
             const eq = ctr ? [Math.round(W0 / 4), Math.round(W0 / 2), W0 - Math.round(W0 / 4) - Math.round(W0 / 2)] : Array.from({ length: n }, (_, i) => i < n - 1 ? Math.round(W0 / n) : W0 - Math.round(W0 / n) * (n - 1))

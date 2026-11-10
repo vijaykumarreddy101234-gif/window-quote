@@ -35,7 +35,7 @@ export function PresetV({ codes, G, h, sp, mesh }) {
   const lines = []
   for (let i = 0; i <= (L ? (mesh ? 1 : 1) : 0); i++) lines.push(<Glass key={i} x1={(gy + i * L) * sp} x2={(gy + i * L) * sp} y1={H - gx} y2={gx} t={V.glass[5] * sp} />)
   if (!L) lines.push(<Glass key="c" x1={gy * sp} x2={gy * sp} y1={H - gx} y2={gx} t={V.glass[5] * sp} />)
-  if (mesh && L) { const my = ((V.meshY || 102.37) - 11) * sp; lines.push(<line key="m" x1={my} x2={my} y1={H - 42 * sp} y2={42 * sp} stroke={GREY} strokeWidth=".9" strokeDasharray="2 1.5" />) }
+  if (mesh && L) { const my = (V.meshIsSash ? V.glass[1] + 2 * L : (V.meshY || 102.37) - 11) * sp; lines.push(<line key="m" x1={my} x2={my} y1={H - 42 * sp} y2={42 * sp} stroke={GREY} strokeWidth=".9" strokeDasharray="2 1.5" />) }
   return <g>{lines}{V.parts.map((p, i) => <Part key={'s' + i} P={G(p[1])} code={p[1]} part={p} m={sill} />)}{V.parts.map((p, i) => <Part key={'h' + i} P={G(p[1])} code={p[1]} part={p} m={head} />)}</g>
 }
 
@@ -49,17 +49,17 @@ export function PresetH({ codes, G, w, sp, panes = [], mesh }) {
   joint.forEach(p => { const d = PDIM[p[1]]; if (!d) return; const [, , rot, fx, , px] = p, ww = rot ? d[1] : d[0]; const a = fx ? px - ww : px, b = fx ? px : px + ww; x0 = Math.min(x0, a); x1 = Math.max(x1, b) })
   const cx = (x0 + x1) / 2, ps = panes.filter(q => !q.mesh)
   const nl = Math.max(1, ...panes.map(q => q.lane + 1))
-  panes.forEach((q, i) => { const y = q.mesh ? ((V.meshY || 102.37) - 11) * sp : (Hh.glass[1] - lane + (q.lane || 0) * lane) * sp
+  panes.forEach((q, i) => { const y = q.mesh ? (V.meshIsSash ? V.glass[1] + 2 * lane : (V.meshY || 102.37) - 11) * sp : (Hh.glass[1] - lane + (q.lane || 0) * lane) * sp
     out.push(q.mesh ? <line key={'g' + i} x1={q.x0 + 4 * sp} x2={q.x1 - 4 * sp} y1={y} y2={y} stroke={GREY} strokeWidth=".9" strokeDasharray="2 1.5" /> : <Glass key={'g' + i} x1={q.x0 + 4 * sp} x2={q.x1 - 4 * sp} y1={y} y2={y} t={Hh.glass[5] * sp} />) })
   // each jamb shows only the leaf (and bead) of the pane that runs into it, plus the mesh sash when that pane is mesh
-  const ids = (q, nm) => nm === 'frame' ? 1 : nm.startsWith('mesh_sash') ? (q && q.mesh) : (q && !q.mesh && (nm.endsWith('@' + ((q.lane || 0) + 1))) && /^(sash|bead)/.test(nm))
+  const ids = (q, nm) => nm === 'frame' ? 1 : nm.startsWith('mesh_') ? (q && q.mesh) : (q && !q.mesh && (nm.endsWith('@' + ((q.lane || 0) + 1))) && /^(sash|bead)/.test(nm))
   const firstP = panes[0], lastP = panes[panes.length - 1]
   const nearest = (arr) => arr.find(q => !q.mesh)
   const side = (q, near, m, tag) => V.parts.forEach((p, i) => { if (/^mullion/.test(p[0])) return; if (p[0] === 'frame' || ids(q, p[0]) || (q && q.mesh && near && /^(sash|bead)/.test(p[0]) && p[0].endsWith('@' + ((near.lane || 0) + 1)))) out.push(<Part key={tag + i} P={G(p[1])} code={p[1]} part={p} m={m} />) })
   side(firstP, nearest(panes), left, 'l'); side(lastP, nearest([...panes].reverse()), right, 'r')
   for (let i = 0; i < panes.length - 1; i++) { if (panes[i].mesh || panes[i + 1].mesh) continue; const mx = panes[i].x1; const m = [sp, 0, 0, sp, mx - cx * sp, 0]
     joint.forEach((p, j) => out.push(<Part key={'j' + i + '_' + j} P={G(p[1])} code={p[1]} part={p} m={m} />)) }
-  const mp = V.parts.find(p => p[0].startsWith('mesh_sash'))
-  if (mp) panes.forEach((q, i) => { if (q.mesh && i > 0 && !panes[i - 1].mesh) out.push(<Part key={'me' + i} P={G(mp[1])} code={mp[1]} part={mp} m={[sp, 0, 0, sp, q.x0 - mp[5] * sp, 0]} />) })
+  const mps = V.parts.filter(p => p[0].startsWith('mesh_')), mp = mps[0]
+  if (mp) panes.forEach((q, i) => { if (q.mesh && i > 0 && !panes[i - 1].mesh) mps.forEach((pp, j) => out.push(<Part key={'me' + i + '_' + j} P={G(pp[1])} code={pp[1]} part={pp} m={[sp, 0, 0, sp, q.x0 - mp[5] * sp, 0]} />)) })
   return <g>{out}</g>
 }
