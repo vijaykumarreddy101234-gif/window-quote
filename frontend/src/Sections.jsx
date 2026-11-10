@@ -130,3 +130,20 @@ export function HSectionImg({ codes, G, w, sp, lanes, casement, panes = [], cols
   })
   return <g>{out}</g>
 }
+
+// ---------- manual zoom / move for the cross-section drawings ----------
+import { useEffect, useRef, useState } from 'react'
+export function PanZoom({ children, w, h, label }) {
+  const [t, setT] = useState({ x: 0, y: 0, s: 1 }), ref = useRef(null)
+  useEffect(() => { const el = ref.current; if (!el) return; const f = e => { e.preventDefault(); const k = e.deltaY < 0 ? 1.15 : 1 / 1.15; setT(p => ({ ...p, s: Math.min(6, Math.max(.4, +(p.s * k).toFixed(3))) })) }; el.addEventListener('wheel', f, { passive: false }); return () => el.removeEventListener('wheel', f) }, [])
+  const down = ev => { ev.stopPropagation(); ev.preventDefault(); const svg = ev.currentTarget.ownerSVGElement, sc = svg.getScreenCTM().a || 1; let lx = ev.clientX, ly = ev.clientY
+    const mv = e2 => { const dx = (e2.clientX - lx) / sc, dy = (e2.clientY - ly) / sc; lx = e2.clientX; ly = e2.clientY; setT(p => ({ ...p, x: p.x + dx, y: p.y + dy })) }
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up) }; window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up) }
+  const zoom = k => ev => { ev.stopPropagation(); setT(p => ({ ...p, s: Math.min(6, Math.max(.4, +(p.s * k).toFixed(3))) })) }
+  const btn = (i, txt, fn, title) => <g key={i} style={{ cursor: 'pointer' }} onPointerDown={e => e.stopPropagation()} onClick={fn}><title>{title}</title><rect x={w - 4 + i * 0} y={0} width="0" height="0" /><circle cx={6 + i * 15} cy={-9} r="6" fill="#fff" stroke="#94a3b8" strokeWidth=".8" /><text x={6 + i * 15} y={-6} fontSize="9" textAnchor="middle" fill="#334155" fontWeight="700">{txt}</text></g>
+  return <g ref={ref}>
+    <g transform={`translate(${t.x},${t.y}) translate(${w / 2},${h / 2}) scale(${t.s}) translate(${-w / 2},${-h / 2})`}>{children}</g>
+    <rect x="-4" y="-4" width={w + 8} height={h + 8} fill="transparent" style={{ cursor: 'grab', touchAction: 'none' }} onPointerDown={down} onDoubleClick={() => setT({ x: 0, y: 0, s: 1 })}><title>Drag to move · scroll to zoom · double-click to reset</title></rect>
+    {btn(0, '+', zoom(1.25), 'Zoom in')}{btn(1, '−', zoom(1 / 1.25), 'Zoom out')}{btn(2, '⟲', ev => { ev.stopPropagation(); setT({ x: 0, y: 0, s: 1 }) }, 'Reset')}{label && btn(3, '⤢', label, 'Open larger')}
+  </g>
+}

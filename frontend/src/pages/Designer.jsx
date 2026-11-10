@@ -5,6 +5,9 @@ import { WindowSvg, getDesign } from '../WindowSvg'
 import { Window3D } from '../Window3D'
 import { DesignThumb } from '../DesignThumb'
 import { profileImg } from '../profileImg'
+import { buildDxf, parseDxf } from '../dxf.mjs'
+import { saveBlob } from '../api'
+import { say } from '../dialog'
 import { TEMPLATES, GALLERY, GROUPS, badge, WINDOW_COLORS, HW_FINISH, SHAPES } from '../templates'
 
 const LEFT = ['designs', 'divide', 'shapes', 'colors'], RIGHT = ['inspect', 'hardware', 'glazing', 'pricing']
@@ -78,6 +81,8 @@ export default function Designer() {
     if (n0 < 2) return
     const h = rescale(dsn.cols[0].rows.map(r => r.h), i, mm, size[1]); push({ ...dsn, cols: dsn.cols.map(c => c.rows.length === n0 ? { ...c, rows: c.rows.map((r, k) => ({ ...r, h: h[k] })) } : c) })
   }
+  const exportDxf = async () => { const dx = buildDxf({ mark: it.mark, name: it.name, width: size[0], height: size[1], design: dsn, glass: glassName }); await saveBlob(new Blob([dx], { type: 'application/dxf' }), (it.mark || 'window') + '.dxf') }
+  const importDxf = ev => { const f = ev.target.files[0]; ev.target.value = ''; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const r = parseDxf(rd.result); push(r.design); setSize([r.width, r.height]); say(`DXF imported: ${r.width} × ${r.height} mm, ${r.notes}. Pick each pane's opening in INSPECT, then Save.`) } catch (e) { say(e.message) } }; rd.readAsText(f) }
   const hw = (pane, key, val) => push({ ...dsn, hw: { ...(dsn.hw || {}), [pane]: { ...((dsn.hw || {})[pane] || {}), [key]: val } } })
   const issues = []
   if (glassName && glasses.length && !glasses.some(g => g.name === glassName)) issues.push(`glass ${glassName.split(' ')[0]} mm has no tenant rate; priced at the default glass rate (Settings → Pricing → Glass)`)
@@ -124,6 +129,8 @@ export default function Designer() {
         <button className={'icon-btn' + (hand ? ' on' : '')} title="Hand tool: drag to move the canvas" onClick={() => setHand(!hand)}>✋</button>
         <button className="icon-btn" title="Centre the design" onClick={() => setPan([0, 0])}>⌖</button>
         <button className="icon-btn" title="Fit to screen" onClick={() => { setZoom(1); setPan([0, 0]) }}>⛶</button>
+        <button className="pill-btn" title="Download this window as an AutoCAD DXF drawing" onClick={exportDxf}>⤓ DXF</button>
+        {edit && <label className="pill-btn" title="Import an AutoCAD DXF: outline and dividers become the design" style={{ cursor: 'pointer' }}>⤒ DXF<input type="file" accept=".dxf" style={{ display: 'none' }} onChange={importDxf} /></label>}
       </div></div>
 
       {(issues.length > 0 || engErr) && <div className="advisory" onClick={() => setAdv(!adv)}>{adv ? '▾' : '▸'} {issues.length + (engErr ? 1 : 0)} design advisory — review before production{adv && <div className="advbody">{engErr && <div>• This drawing cannot be laid out yet: {e.error}</div>}{issues.map(x => <div key={x}>• {x}</div>)}</div>}</div>}

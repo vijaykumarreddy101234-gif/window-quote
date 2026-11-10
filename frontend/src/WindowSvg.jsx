@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { BayDrawing } from './Bay'
-import { VSection, HSection, VSectionImg, HSectionImg, trackSpec } from './Sections'
+import { VSection, HSection, VSectionImg, HSectionImg, PanZoom, trackSpec } from './Sections'
 import { useProfiles, profMm } from './profileClean'
+import { CalcPad } from './CalcPad'
+import { createPortal } from 'react-dom'
 // Design-driven elevation drawing (sliding n-panel, grid of casement/fixed/louvre/fan cells, arch, door, bay).
 export function getDesign(item) {
   let d = item.design
@@ -41,7 +43,7 @@ export function archRise(D, W, H) {
 }
 
 export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim, onGeom, onGeomStart }) {
-  const [ed, setEd] = useState(null)
+  const [ed, setEd] = useState(null); const [big, setBig] = useState(false)
   const cuts0 = (engine && engine.cuts) || [], codeOf = r => (cuts0.find(c => c.role === r) || {}).code
   const codes = { frame: codeOf('Frame'), sash: codeOf('Sash'), bead: codeOf('Bead'), il: codeOf('Interlock'), mesh: codeOf('Mesh Sash'), mull: codeOf('Mullion') }
   const G = useProfiles(Object.values(codes))
@@ -177,9 +179,9 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
 
   // ---- dimensions ----
   const editable = key => onDim && /^(W|H|cw\d+|r\d+|rest)$/.test(key)
-  const open = (key, x, y, label) => editable(key) && setEd({ key, x, y, val: String(label) })
-  const tickH = (x1, x2, y, label, key) => <g key={key} stroke="#334155" fill="#334155" style={editable(key) ? { cursor: 'text' } : undefined} onClick={() => open(key, (x1 + x2) / 2, y, label)}><line x1={x1} y1={y} x2={x2} y2={y} strokeWidth=".8" markerStart="url(#dm)" markerEnd="url(#dm)" /><rect x={(x1 + x2) / 2 - 15} y={y - 6.5} width="30" height="13" fill="#fff" stroke="#334155" strokeWidth=".6" /><text x={(x1 + x2) / 2} y={y + 3.5} fontSize="8.5" fontWeight="700" textAnchor="middle" stroke="none" fill="#111">{label}</text></g>
-  const tickV = (y1, y2, x, label, key) => <g key={key} stroke="#334155" fill="#334155" style={editable(key) ? { cursor: 'text' } : undefined} onClick={() => open(key, x, (y1 + y2) / 2, label)}><line x1={x} y1={y1} x2={x} y2={y2} strokeWidth=".8" markerStart="url(#dm)" markerEnd="url(#dm)" /><rect x={x - 15} y={(y1 + y2) / 2 - 6.5} width="30" height="13" fill="#fff" stroke="#334155" strokeWidth=".6" /><text x={x} y={(y1 + y2) / 2 + 3.5} fontSize="8.5" fontWeight="700" textAnchor="middle" stroke="none" fill="#111">{label}</text></g>
+  const open = (key, x, y, label, ev) => editable(key) && setEd({ key, x, y, val: String(label), cx: ev ? ev.clientX : 300, cy: ev ? ev.clientY : 300 })
+  const tickH = (x1, x2, y, label, key) => <g key={key} stroke="#334155" fill="#334155" style={editable(key) ? { cursor: 'text' } : undefined} onClick={ev => open(key, (x1 + x2) / 2, y, label, ev)}><line x1={x1} y1={y} x2={x2} y2={y} strokeWidth=".8" markerStart="url(#dm)" markerEnd="url(#dm)" /><rect x={(x1 + x2) / 2 - 15} y={y - 6.5} width="30" height="13" fill="#fff" stroke="#334155" strokeWidth=".6" /><text x={(x1 + x2) / 2} y={y + 3.5} fontSize="8.5" fontWeight="700" textAnchor="middle" stroke="none" fill="#111">{label}</text></g>
+  const tickV = (y1, y2, x, label, key) => <g key={key} stroke="#334155" fill="#334155" style={editable(key) ? { cursor: 'text' } : undefined} onClick={ev => open(key, x, (y1 + y2) / 2, label, ev)}><line x1={x} y1={y1} x2={x} y2={y2} strokeWidth=".8" markerStart="url(#dm)" markerEnd="url(#dm)" /><rect x={x - 15} y={(y1 + y2) / 2 - 6.5} width="30" height="13" fill="#fff" stroke="#334155" strokeWidth=".6" /><text x={x} y={(y1 + y2) / 2 + 3.5} fontSize="8.5" fontWeight="700" textAnchor="middle" stroke="none" fill="#111">{label}</text></g>
   const dimEls = []
   if (dims) {
     dimEls.push(tickH(ox, ox + w, oy - 24, W, 'W'), tickV(oy, oy + h, ox - 26, H, 'H'))
@@ -188,6 +190,8 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
     if (rise) { dimEls.push(tickV(oy, y0, ox + w + 26, rise, 'rise'), tickV(y0, oy + h, ox + w + 26, H - rise, 'base')) }
     else if (dimsV.length) { dimsV.forEach(([a, b, v, kk]) => dimEls.push(tickV(a, b, ox + w + 26, v, kk))); const last = dimsV[dimsV.length - 1][1]; dimEls.push(tickV(last, oy + h - frame * .2, ox + w + 26, Math.round(H - dimsV.reduce((s, d) => s + d[2], 0)), 'rest')) }
   }
+  const vSec = (hh, spx, spf) => G(codes.frame) ? <VSectionImg codes={codes} G={G} h={hh} sp={spx} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={hh} sp={spf} mesh={meshOn} casement={D.kind !== 'sliding'} />
+  const hSec = (ww, spx, spf) => { const f = ww / w, pn = secPanes.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })), cl = colInfo.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })); return G(codes.frame) ? <HSectionImg codes={codes} G={G} w={ww} sp={spx} lanes={lanes} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={ww} sp={spf} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> }
   const iso = mode === '3d'
   const psz = mini ? {} : { maxWidth: '100%', height: 'auto', maxHeight: 'calc(100vh - 300px)' }
   return (
@@ -199,13 +203,13 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       {body}
       {grips}
       {dimEls}
-      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}>{G(codes.frame) ? <VSectionImg codes={codes} G={G} h={h} sp={sp2} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={h} sp={sp} mesh={meshOn} casement={D.kind !== 'sliding'} />}
+      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}><PanZoom w={64} h={h} label={() => setBig(true)}>{vSec(h, sp2, sp)}</PanZoom>
         <text transform="rotate(-90)" x={-h / 2 + 8} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'IN' : 'OUT'}</text><text transform="rotate(-90)" x={-h / 2 - 22} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'OUT' : 'IN'}</text></g>}
-      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}>{G(codes.frame) ? <HSectionImg codes={codes} G={G} w={w} sp={sp2} lanes={lanes} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={w} sp={sp} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} />}
+      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}><PanZoom w={w} h={64}>{hSec(w, sp2, sp)}</PanZoom>
         <text x={w + 8} y="8" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'IN' : 'OUT'}</text><text x={w + 8} y="36" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'OUT' : 'IN'}</text></g>}
-      {ed && <foreignObject x={ed.x - 34} y={ed.y - 13} width="92" height="26"><div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#fff', border: '1.5px solid #2563eb', borderRadius: 6, padding: '1px 4px', height: 24, boxSizing: 'border-box' }}>
-        <input autoFocus type="number" min="1" value={ed.val} onChange={ev => setEd({ ...ed, val: ev.target.value })} onFocus={ev => ev.target.select()}
-          onKeyDown={ev => { if (ev.key === 'Enter') { const v = Math.round(+ed.val); if (v > 0) onDim(ed.key, v); setEd(null) } else if (ev.key === 'Escape') setEd(null) }} onBlur={() => setEd(null)}
-          style={{ width: 52, border: 0, outline: 0, fontSize: 11, fontWeight: 700, background: 'transparent' }} /><span style={{ fontSize: 9, color: '#64748b' }}>mm</span></div></foreignObject>}
+      {big && createPortal(<div className="sec-back" onMouseDown={e => e.target === e.currentTarget && setBig(false)}><div className="sec-big"><div className="sec-bh"><b>Cross-sections · {item.mark}</b><span className="muted">Drag to move · scroll or +/− to zoom · double-click to reset</span><button className="x" onClick={() => setBig(false)} aria-label="Close">✕</button></div>
+        <div className="sec-cols"><div><div className="sec-t">Vertical section B–B</div><svg viewBox="-20 -20 190 560" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={150} h={520}>{vSec(520, 1.1, 1.0)}</PanZoom></svg></div>
+          <div><div className="sec-t">Horizontal section A–A</div><svg viewBox="-20 -20 880 200" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={840} h={160}>{hSec(840, 1.1, 1.0)}</PanZoom></svg></div></div></div></div>, document.body)}
+      {ed && <foreignObject x={0} y={0} width="1" height="1"><CalcPad value={ed.val} x={ed.cx} y={ed.cy} onOk={v => { onDim(ed.key, v); setEd(null) }} onClose={() => setEd(null)} /></foreignObject>}
     </svg>)
 }

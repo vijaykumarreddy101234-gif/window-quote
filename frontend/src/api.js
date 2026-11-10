@@ -22,6 +22,9 @@ export async function downloadFile(path, fallbackName = 'download') {
   if (!res.ok) { const e = await res.json().catch(() => ({})); say(e.error || 'Download failed'); return }
   const cd = res.headers.get('Content-Disposition') || '', m = /filename="?([^";]+)"?/.exec(cd)
   const blob = await res.blob(), name = m ? m[1] : fallbackName
+  return saveBlob(blob, name)
+}
+export async function saveBlob(blob, name) {
   // inside the artifact viewer plain downloads are blocked: use its download capability when present
   try { const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; if (dl) { await dl.save({ filename: name, data: blob }).catch(() => {}); return } } catch (e) {}
   const url = URL.createObjectURL(blob), a = document.createElement('a')

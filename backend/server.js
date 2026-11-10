@@ -238,7 +238,7 @@ function nextNumber(table, prefix) {
 // ---- app ----
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use((req, res, next) => /^\/api\/v1\/app\/(brands\/catalogue|profiles\/import|profiles\/[^/]+\/image|inventory\/hardware-import|glass\/import)/.test(req.path) ? next() : express.json()(req, res, next));
 const api = express.Router();
 
 api.post('/auth/login', (req, res) => {
@@ -393,6 +393,15 @@ api.post('/quotations/:id/items/:itemId/preview', (req, res) => {
   if (!it) return res.status(404).json({ error: 'Not found' });
   const b = req.body, n = { ...it, design: JSON.stringify(b.design || {}), width: b.width ?? it.width, height: b.height ?? it.height, glass: b.glass ?? it.glass, qty: b.qty ?? it.qty };
   res.json({ item: { ...n, ...itemPrice({ ...n, rate: null }) }, engine: fullEngine(n) });
+});
+api.get('/quotations/:id/items/:itemId/dxf', async (req, res) => {
+  const it = db.prepare('SELECT * FROM quotation_items WHERE id=? AND quotation_id=?').get(req.params.itemId, req.params.id);
+  if (!it) return res.status(404).json({ error: 'Not found' });
+  let design = it.design; try { if (typeof design === 'string') design = JSON.parse(design); } catch (e) { design = null; }
+  if (!design || !design.kind) design = { kind: 'sliding', panels: 2 };
+  const { buildDxf } = await import('./dxf.mjs');
+  const dxf = buildDxf({ mark: it.mark, name: it.name, width: it.width, height: it.height, design, glass: it.glass });
+  res.set({ 'Content-Type': 'application/dxf', 'Content-Disposition': `attachment; filename="${String(it.mark || 'window').replace(/[^\w.-]/g, '_')}.dxf"` }).send(dxf);
 });
 api.get('/quotations/:id/items/:itemId/engine', (req, res) => {
   const it = db.prepare('SELECT * FROM quotation_items WHERE id=?').get(req.params.itemId);
@@ -829,6 +838,24 @@ api.post('/profiles/:code/image', express.json({ limit: '6mb' }), (req, res) => 
   const m = /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/.exec(String(req.body.data || '')); if (!m) return res.status(400).json({ error: 'Send a PNG, JPG or WebP drawing' });
   const buf = Buffer.from(m[2], 'base64'); if (buf.length > 4e6) return res.status(400).json({ error: 'Drawing is too large (max 4 MB)' });
   require('fs').mkdirSync(PROFDIR, { recursive: true }); require('fs').writeFileSync(path.join(PROFDIR, code + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1])), buf); res.json({ ok: true });
+});
+api.post('/brands/catalogue', express.json({ limit: '80mb' }), async (req, res) => {
+  const brand = String(req.body.brand || '').trim(), m = /^data:application\/pdf;base64,(.+)$/.exec(String(req.body.file || ''))
+  if (!brand) return res.status(400).json({ error: 'Enter the brand name' }); if (!m) return res.status(400).json({ error: 'Upload the catalogue as a PDF' })
+  const fs = require('fs'), os = require('os'), tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cat-')), pdf = path.join(tmp, 'c.pdf')
+  try {
+    fs.writeFileSync(pdf, Buffer.from(m[1], 'base64')); const found = await require('./catalogue').extract(pdf, tmp)
+    if (!found.length) return res.status(422).json({ error: 'No profile drawings with item codes were found in this PDF.' })
+    fs.mkdirSync(PROFDIR, { recursive: true }); let created = 0, updated = 0, drawings = 0
+    for (const f of found) {
+      const ex = db.prepare('SELECT id FROM profiles WHERE code=?').get(f.code)
+      if (ex) { db.prepare('UPDATE profiles SET description=COALESCE(NULLIF(?,\'\'),description), weight=CASE WHEN ?>0 THEN ? ELSE weight END WHERE id=?').run(f.description, f.weight, f.weight, ex.id); updated++ }
+      else { db.prepare('INSERT INTO profiles VALUES (?,?,?,?,?,NULL)').run(uid(), brand, f.code, f.description, f.weight); created++ }
+      const bundled = fs.existsSync(path.join(__dirname, '..', 'frontend', 'dist', 'profiles', f.code + '.png'))
+      if (f.png && (!ex || !bundled)) { fs.copyFileSync(f.png, path.join(PROFDIR, f.code + '.png')); drawings++ }
+    }
+    res.json({ found: found.length, created, updated, drawings, profiles: found.map(f => ({ code: f.code, description: f.description, weight: f.weight, drawing: !!f.png })) })
+  } catch (e) { res.status(500).json({ error: e.message }) } finally { fs.rmSync(tmp, { recursive: true, force: true }) }
 });
 api.get('/inventory/profiles', (req, res) => res.json(db.prepare('SELECT * FROM profiles').all()));
 api.get('/inventory/issue-receipt', (req, res) => res.json({ issues: [], receipts: [] }));
