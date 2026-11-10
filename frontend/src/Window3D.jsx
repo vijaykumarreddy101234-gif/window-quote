@@ -1,7 +1,7 @@
 // 3D & whole-window sections viewer (three.js), driven by the same design JSON as the 2D drawing.
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { getDesign } from './WindowSvg'
+import { WindowSvg, getDesign } from './WindowSvg'
 import { WINDOW_COLORS } from './templates'
 
 const PROFILE_COL = Object.fromEntries(WINDOW_COLORS)
@@ -52,6 +52,8 @@ export function Window3D({ item, design, engine }) {
   const ref = useRef(), st = useRef({})
   const [az, setAz] = useState(32), [el, setEl] = useState(12), [expl, setExpl] = useState(0), [transp, setTransp] = useState(false), [showGlass, setShowGlass] = useState(true), [cutH, setCutH] = useState(false), [cutV, setCutV] = useState(false), [model, setModel] = useState('whole'), [zoom, setZoom] = useState(1)
   const D = design || getDesign(item), W = item.width, H = item.height
+  const LAYER = { Frame: 'frame', Sash: 'sash', Bead: 'sash', Interlock: 'sash', 'Mesh Sash': 'mesh', Mullion: 'frame', Coupler: 'frame' }
+  const members = ((engine && engine.cuts) || []).filter(c => LAYER[c.role]).flatMap(c => (c.lengths || c.lens || (c.len ? [c.len] : [])).map(L => ({ label: `${c.role.toLowerCase().replace(' ', '_')} · ${c.code} · ${Math.round(L)} mm`, layer: LAYER[c.role] })))
   const depth = engine && engine.options ? (engine.options[0].selected && /112|95/.test(engine.options[0].selected) ? 124 : /80|92/.test(engine.options[0].selected) ? 102.4 : 82) : 82
   // scene setup
   useEffect(() => {
@@ -89,7 +91,7 @@ export function Window3D({ item, design, engine }) {
     cam.position.set(R * Math.sin(a) * Math.cos(e), R * Math.sin(e), R * Math.cos(a) * Math.cos(e)); cam.lookAt(0, 0, 0)
     const planes = []; if (cutH) planes.push(new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)); if (cutV) planes.push(new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0))
     grp.traverse(o => { if (!o.isMesh) return; const L = o.userData.layer
-      o.visible = (L !== 'glass' && L !== 'mesh' || showGlass) && (model === 'whole' || (model === 'frame' && L === 'frame') || (model === 'sashes' && (L === 'sash' || L === 'glass' || L === 'mesh' || L === 'hardware')))
+      o.visible = (L !== 'glass' && L !== 'mesh' || showGlass) && (model === 'whole' || (model === 'frame' && L === 'frame') || (model === 'sashes' && (L === 'sash' || L === 'glass' || L === 'mesh' || L === 'hardware')) || (model.startsWith('m:') && L === model.slice(2)))
       const m = o.material; m.clippingPlanes = planes; m.clipShadows = true; m.side = THREE.DoubleSide
       const base = o.userData.base ?? (o.userData.base = o.position.z); const k = L === 'sash' || L === 'glass' || L === 'mesh' || L === 'hardware' ? 1 : L === 'louvre' ? .5 : 0; o.position.z = base + k * expl * 3.5 })
     renderer.render(scene, cam)
@@ -98,8 +100,10 @@ export function Window3D({ item, design, engine }) {
   return <div className="v3d">
     <h4 style={{ margin: '4px 0' }}>3D & whole-window sections</h4>
     <div className="muted" style={{ fontSize: 13 }}>{W} × {H} × {depth} mm · pack v31</div>
-    <div className="v3row"><span className="muted">Inspect model</span><select className="sel" style={{ width: 'auto' }} value={model} onChange={ev => setModel(ev.target.value)}><option value="whole">Whole window · nominal depth</option><option value="frame">Outer frame only</option><option value="sashes">Sashes, glass and hardware</option></select>
-      <button className="icon-btn" onClick={() => setZoom(z => Math.min(3, z * 1.2))} title="Zoom in">🔍</button><button className="icon-btn" onClick={() => setZoom(z => Math.max(.4, z / 1.2))} title="Zoom out">🔎</button></div>
+    <div className="v3row"><span className="muted">Inspect model</span><select className="sel" style={{ width: 'auto', maxWidth: 320 }} value={model} onChange={ev => setModel(ev.target.value)}><option value="whole">Whole window · nominal depth</option><option value="frame">Outer frame only</option><option value="sashes">Sashes, glass and hardware</option>
+        {members.map((m, i) => <option key={i} value={'m:' + m.layer}>{m.label}</option>)}</select>
+      <button className="icon-btn" onClick={() => setZoom(z => Math.min(3, z * 1.2))} title="Zoom in">🔍</button><button className="icon-btn" onClick={() => setZoom(z => Math.max(.4, z / 1.2))} title="Zoom out">🔎</button>
+      <button className="icon-btn" title="Save image" onClick={() => { const { renderer, scene, cam } = st.current; if (!renderer) return; renderer.render(scene, cam); const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = `${item.mark || item.name || 'window'}-3d.png`; a.click() }}>💾</button></div>
     <div className="v3wrap">
       <div className="v3stage" onPointerDown={ev => { drag.current = [ev.clientX, ev.clientY] }} onPointerUp={() => { drag.current = null }} onPointerLeave={() => { drag.current = null }}
         onPointerMove={ev => { if (!drag.current) return; const dx = ev.clientX - drag.current[0], dy = ev.clientY - drag.current[1]; drag.current = [ev.clientX, ev.clientY]; setAz(a => Math.max(-85, Math.min(85, a + dx * .4))); setEl(e => Math.max(-40, Math.min(60, e + dy * .4))) }}>
@@ -107,14 +111,14 @@ export function Window3D({ item, design, engine }) {
         <input className="az" type="range" min="-85" max="85" value={az} onChange={ev => setAz(+ev.target.value)} aria-label="Rotate horizontally" />
         <input className="elv" type="range" min="-40" max="60" value={el} onChange={ev => setEl(+ev.target.value)} aria-label="Rotate vertically" />
       </div>
-      <div className="v3side"><div className="muted" style={{ fontSize: 12, fontWeight: 700 }}>Vertical B–B at {Math.round(W / 2)}.0 mm</div><SectionSvg H={H} depth={depth} /><div className="muted" style={{ fontSize: 11 }}>Traced installed sections; chambers remain voids. depth → / Y ↓</div></div>
+      <div className="v3side"><div className="muted" style={{ fontSize: 12, fontWeight: 700 }}>Vertical B–B at {Math.round(W / 2)}.0 mm</div><WindowSvg item={item} design={D} engine={engine} section="v" /><div className="muted" style={{ fontSize: 11 }}>Traced installed sections; chambers remain voids. depth → / Y ↓</div></div>
     </div>
     <div className="v3row"><span>Exploded view</span><input type="range" min="0" max="100" value={expl} onChange={ev => setExpl(+ev.target.value)} style={{ flex: 1 }} />
       <label><input type="checkbox" checked={transp} onChange={ev => setTransp(ev.target.checked)} /> Transparent profiles</label><label><input type="checkbox" checked={showGlass} onChange={ev => setShowGlass(ev.target.checked)} /> Show glass</label></div>
     <div className="v3row"><b>Cut away 3D</b><label><input type="checkbox" checked={cutH} onChange={ev => setCutH(ev.target.checked)} /> Horizontal A–A</label><label><input type="checkbox" checked={cutV} onChange={ev => setCutV(ev.target.checked)} /> Vertical B–B</label></div>
     <div style={{ borderTop: '2px solid #dc2626', margin: '8px 0' }} />
     <b>Horizontal A–A at {Math.round(H / 2)}.0 mm</b><div className="muted" style={{ fontSize: 12 }}>Traced installed sections; chambers remain voids. X → / depth ↓</div>
-    <PlanSvg W={W} depth={depth} D={D} />
+    <WindowSvg item={item} design={D} engine={engine} section="h" />
   </div>
 }
 function SectionSvg({ H, depth }) {

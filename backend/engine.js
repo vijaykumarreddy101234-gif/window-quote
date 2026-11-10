@@ -63,7 +63,7 @@ function compute(d, ctx) {
     else {
       // unequal sash sizes: d.widths = visible leaf widths (sum = W); equal otherwise
       const dw = Array.isArray(d.widths) && d.widths.length === n && Math.abs(d.widths.reduce((a, b) => a + (+b || 0), 0) - W) < 2 ? d.widths.map(Number) : Array(n).fill(pw);
-      const adj = n === 2 ? [6, 6] : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
+      const adj = n === 2 ? (mesh ? [-1, -1] : [6, 6]) : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
       widths = dw.map((x, i) => x + adj[i]);
       meshN = mesh; meshW = dw[n - 1] - 1;
     }
@@ -74,7 +74,7 @@ function compute(d, ctx) {
     });
     add('Sash', sashCode, sashLens, { grouped: true });
     add('Bead', beadCode, beadLens, { grouped: true });
-    add('Interlock', S.il, Array(ctr || mesh === 1 ? n + 1 : n).fill(sashH - 6));
+    add('Interlock', S.il, Array(ctr || (mesh === 1 && n > 2) ? n + 1 : n).fill(sashH - 6));
     if (n >= 4) add('Coupler', 'RSA-22SA', [sashH - 6]);
     if (meshN) add('Mesh Sash', meshCode, [...Array(meshN * 2).fill(Math.round(meshW)), ...Array(meshN * 2).fill(sashH)], { grouped: true });
     if (meshN) add('Bead', beadCode, [...Array(meshN * 2).fill(Math.round(meshW - 89 - 8)), ...Array(meshN * 2).fill(Math.round(sashH - 84 - 8))], { grouped: true });

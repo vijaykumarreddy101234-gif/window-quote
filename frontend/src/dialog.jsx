@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 let push = null
 const call = d => new Promise(res => { if (push) push({ ...d, res }); else res(d.kind === 'confirm' ? false : null) })
 // fields: [{k,label,value,type,required}] -> resolves object or null
-export const askForm = (title, fields, ok = 'Save') => call({ kind: 'form', title, fields, ok })
+export const askForm = (title, fields, ok = 'Save', note = '') => call({ kind: 'form', title, fields, ok, note })
 export const askText = async (title, value = '') => { const r = await askForm(title, [{ k: 'v', label: title, value, required: true }], 'OK'); return r ? r.v : null }
 export const askConfirm = (msg, ok = 'Confirm') => call({ kind: 'confirm', msg, ok })
 export const say = msg => call({ kind: 'alert', msg })
@@ -19,7 +19,8 @@ export function DialogHost() {
   return <div className="dlg-back" onMouseDown={e => e.target === e.currentTarget && close(d.kind === 'confirm' ? false : null)}>
     <form className="dlg" onSubmit={submit}>
       {d.title && <h3>{d.title}</h3>}{d.msg && <p>{d.msg}</p>}
-      {d.kind === 'form' && d.fields.map((f, i) => <label key={f.k} className="dlg-f"><span>{f.label}{f.required ? ' *' : ''}</span><input autoFocus={i === 0} type={f.type || 'text'} value={vals[f.k]} onChange={e => setVals({ ...vals, [f.k]: e.target.value })} /></label>)}
+      {d.kind === 'form' && d.fields.map((f, i) => <label key={f.k} className="dlg-f"><span>{f.label}{f.required ? ' *' : ''}</span><input autoFocus={i === 0} type={f.type || 'text'} placeholder={f.placeholder || ''} value={vals[f.k]} onChange={e => setVals({ ...vals, [f.k]: e.target.value })} /></label>)}
+      {d.kind === 'form' && d.note && <div className="muted" style={{ fontSize: 13, margin: '4px 0 8px' }}>{d.note}</div>}
       {err && <div className="dlg-err">{err}</div>}
       <div className="dlg-a">{d.kind !== 'alert' && <button type="button" className="btn ghost" onClick={() => close(d.kind === 'confirm' ? false : null)}>Cancel</button>}<button className="btn" autoFocus={d.kind !== 'form'}>{d.kind === 'alert' ? 'OK' : d.ok}</button></div>
     </form></div>

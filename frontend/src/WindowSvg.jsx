@@ -43,7 +43,7 @@ export function archRise(D, W, H) {
   return 0
 }
 
-export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim, onGeom, onGeomStart }) {
+export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim, onGeom, onGeomStart, section }) {
   const [ed, setEd] = useState(null); const [big, setBig] = useState(false)
   const cuts0 = (engine && engine.cuts) || [], codeOf = r => (cuts0.find(c => c.role === r) || {}).code
   const codes = { frame: codeOf('Frame'), sash: codeOf('Sash'), bead: codeOf('Bead'), il: codeOf('Interlock'), mesh: codeOf('Mesh Sash'), mull: codeOf('Mullion') }
@@ -194,6 +194,9 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const vSec = (hh, spx, spf) => G(codes.frame) && hasPreset(codes) ? <PresetV codes={codes} G={G} h={hh} sp={spx} mesh={meshOn} /> : G(codes.frame) ? <VSectionImg codes={codes} G={G} h={hh} sp={spx} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={hh} sp={spf} mesh={meshOn} casement={D.kind !== 'sliding'} />
   const hSec = (ww, spx, spf) => { const f = ww / w, pn = secPanes.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })), cl = colInfo.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })); return D.kind !== 'sliding' && G(codes.frame) && isCasPreset(codes) ? <PresetHCas codes={codes} G={G} w={ww} sp={spx} cols={cl} /> : D.kind === 'sliding' && G(codes.frame) && hasPreset(codes, 'h') ? <PresetH codes={codes} G={G} w={ww} sp={spx} panes={pn} mesh={meshOn} /> : G(codes.frame) ? <HSectionImg codes={codes} G={G} w={ww} sp={spx} lanes={lanes} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={ww} sp={spf} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> }
   const iso = mode === '3d'
+  // section-only renders (used by the 3D page): real traced vertical / horizontal sections
+  if (section === 'v') return <svg viewBox="-20 -20 190 560" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={150} h={520}>{vSec(520, 1.1, 1.0)}</PanZoom></svg>
+  if (section === 'h') return <svg viewBox="-20 -20 880 200" width="100%" style={{ background: '#fff', border: '1px solid #e5e7eb' }}><PanZoom w={840} h={160}>{hSec(840, 1.1, 1.0)}</PanZoom></svg>
   const psz = mini ? {} : { maxWidth: '100%', height: 'auto', maxHeight: 'calc(100vh - 300px)' }
   return (
     <svg viewBox={`0 0 ${vw + (iso ? 30 : 0)} ${vh + (iso ? 20 : 0)}`} width={mini ? '100%' : Math.max(vw * 1.25, 560)} height={mini ? '100%' : undefined} style={{ display: 'block', margin: '0 auto', ...psz }}>
