@@ -1,0 +1,22 @@
+10 mm clear glass|10 mm|1200
+10 mm clear toughened glass|10 mm|1600
+12 mm clear glass|12 mm|1500
+20 mm DGU 5-10-5 clear glass|20 mm|3200
+4 mm clear glass|4 mm|480
+4 mm pinhead glass|4 mm|400
+4.5 mm pinhead glass|4.5 mm|450
+5 mm clear glass|5 mm|580
+5 mm clear toughened glass|5 mm|850
+5 mm frosted glass|5 mm|900
+5 mm frosted toughened glass|5 mm|1400
+5 mm grey tinted glass|5 mm|750
+5 mm grey tinted toughened glass|5 mm|900
+6 mm clear glass|6 mm|700
+6 mm frosted glass|6 mm|1200
+6 mm grey tinted glass|6 mm|1000
+6 mm MDF board|6 mm|500
+6 mm toughened glass|6 mm|950
+8 mm clear glass|8 mm|750
+8 mm clear toughened glass|8 mm|1200
+8 mm grey tinted glass|8 mm|1000
+UPVC panel board|15 mm|0
