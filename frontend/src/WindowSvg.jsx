@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BayDrawing } from './Bay'
+import { VSection, HSection, trackSpec } from './Sections'
 // Design-driven elevation drawing (sliding n-panel, grid of casement/fixed/louvre/fan cells, arch, door, bay).
 export function getDesign(item) {
   let d = item.design
@@ -44,7 +45,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   if (D.bay && !mini && D.kind === 'grid' && (D.cols || []).length > 1) return <BayDrawing item={item} design={D} side={side} selected={selected} onSelect={onSelect} />
   const k = mini ? Math.min(150 / W, 150 / H) : Math.min(500 / W, 360 / H), w = W * k, h = H * k
   const frame = Math.max(6, 46 * k), sash = Math.max(5, 40 * k)
-  const L = dims ? 92 : 6, T = dims ? 46 : 6, Rm = dims ? 76 : 6, B = dims ? 92 : 6
+  const L = dims ? 128 : 6, T = dims ? 46 : 6, Rm = dims ? 76 : 6, B = dims ? 120 : 6
   const ox = L, oy = T, vw = w + L + Rm, vh = h + T + B
   const flip = side === 'outside'
   const fillP = PROF[D.colour?.Window] || '#fbfbfa', tint = TINT[D.colour?.Glass]
@@ -61,7 +62,10 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
     <rect x={vertical ? x - 9 : x} y={vertical ? y : y - 9} width={vertical ? 18 : len} height={vertical ? len : 18} fill="transparent" />
     <rect x={vertical ? x - 3.5 : x + len / 2 - 14} y={vertical ? y + len / 2 - 14 : y - 3.5} width={vertical ? 7 : 28} height={vertical ? 28 : 7} rx="3.5" fill="#2563eb" stroke="#fff" strokeWidth="1" /></g> : null
   const clampSplit = (norm, i, b) => { const cum = norm.slice(0, i).reduce((a, c) => a + c, 0), p = norm[i] + norm[i + 1], mn = Math.min(.1, p / 3); return [Math.min(p - mn, Math.max(mn, b - cum)), p] }
-  const body = [], grips = [], dimsV = [], dimsH = []
+  const body = [], grips = [], dimsV = [], dimsH = [], secPanes = [], colInfo = []
+  const series = +(engine && engine.series) || +((/(\d+)\s*series/i.exec((item.system || '') + ' ' + (item.name || '')) || [])[1]) || 62
+  const meshOn = (D.mesh || 0) > 0 || !!(item.mesh && item.mesh !== 'No mesh'), lanes = D.kind === 'sliding' ? (meshOn ? 3 : (D.panels || 2) > 2 || series >= 80 ? 3 : 2) : undefined
+  const sp = Math.min(.8, 58 / trackSpec(series, lanes).depth)
   let num = 0
   const sel = (i) => onSelect ? { style: { cursor: onCell ? 'crosshair' : 'pointer' }, onClick: (ev) => { onSelect(i); if (onCell) { const r = ev.currentTarget.getBoundingClientRect(); onCell(i, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height) } } } : {}
   const gb = (x, y, ww, hh) => D.georgian ? <g stroke="#94a3b8" strokeWidth="1.2">{[1, 2].map(j => <line key={'v' + j} x1={x + ww * j / 3} x2={x + ww * j / 3} y1={y} y2={y + hh} />)}{[1, 2].map(j => <line key={'h' + j} y1={y + hh * j / 3} y2={y + hh * j / 3} x1={x} x2={x + ww} />)}</g> : null
@@ -103,6 +107,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
     body.push(<Glass key="bg" x={rg.x} y={iy} w={rg.w} h={ih} tint={tint} />)
     leaves.forEach((lf, i) => {
       const { x, w: pw, m: isMesh } = lf, cx = x + pw / 2, nn = ++num
+      secPanes.push({ x0: x - ox + (i > 0 ? ov / 2 : 0), x1: x - ox + pw - (i < n - 1 ? ov / 2 : 0), lane: isMesh ? Math.min(2, lanes - 1) : i % 2, mesh: isMesh })
       const m62 = isMesh && (engine && engine.meshCode === 'RSM-62MM' || (D.profiles && D.profiles.mesh === 'RSM-62MM')), mt = isMesh ? sash * (m62 ? .85 : .7) : sash
       body.push(<g key={i} {...sel(i)}>
         <Mitre x={x} y={iy} w={pw} h={sh} t={mt} fill={fillP} /><Glass x={x + mt} y={iy + mt} w={pw - 2 * mt} h={sh - 2 * mt} mesh={isMesh} tint={tint} />
@@ -160,6 +165,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
         cy += ch
       })
       if (ci && onGeom) { const cn = cols.map(q => q.w / tw), cc = ci; grips.push(grip('mg' + ci, cx, rg.y, rg.h, true, sx => { const [nl, pp] = clampSplit(cn, cc - 1, (sx - rg.x) / rg.w), n2 = Math.round(nl * 1000) / 1000; return d => ({ ...d, cols: d.cols.map((q, k) => ({ ...q, w: k === cc - 1 ? n2 : k === cc ? +(pp - n2).toFixed(3) : +cn[k].toFixed(3) })) }) })) }
+      colInfo.push({ x0: cx - ox, x1: cx - ox + cw, open: c.rows.some(r => r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN') })
       if (ci) body.push(<rect key={'mu' + ci} x={cx - frame * .3} y={rg.y} width={frame * .6} height={rg.h} fill={fillP} stroke={STROKE} strokeWidth=".8" />)
       cx += cw
     })
@@ -189,11 +195,10 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       {body}
       {grips}
       {dimEls}
-      {dims && <g transform={`translate(0,${oy + h + 56})`} fontSize="6.5" fontWeight="700" fill="#334155"><line x1={ox + 14} x2={ox + w - 14} y1="0" y2="0" stroke="#8fb9d6" strokeWidth="2" /><line x1={ox + 14} x2={ox + w - 14} y1="8" y2="8" stroke="#94a3b8" strokeWidth=".8" strokeDasharray="3 2" />
-        {[ox, ox + w - 22].map(x => <g key={x} transform={`translate(${x},-7)`} fill="#fff" stroke={STROKE} strokeWidth=".8"><rect width="22" height="14" rx="1.5" /><rect x="3" y="3" width="7" height="8" fill="#e7eef5" /></g>)}
-        <text x={ox + w / 2} y="-5" textAnchor="middle">{flip ? 'IN' : 'OUT'}</text><text x={ox + w / 2} y="18" textAnchor="middle">{flip ? 'OUT' : 'IN'}</text></g>}
-      {dims && [oy + 8, oy + h - 8].map((yy, i) => <g key={i} transform={`translate(${ox - 72},${yy - 14})`} fill="#fff" stroke={STROKE} strokeWidth=".8"><rect x="-7" y="0" width="14" height="28" rx="1.5" /><rect x="-3.5" y="4" width="7" height="8" fill="#e7eef5" /><rect x="-3.5" y="16" width="7" height="8" fill="#e7eef5" /></g>)}
-      {dims && <g transform={`translate(${ox - 66},${oy + h / 2})`} fontSize="7.5" fontWeight="700" fill="#334155"><line x1="0" y1={-h / 2 + 14} x2="0" y2={h / 2 - 14} stroke="#8fb9d6" strokeWidth="2" /><text transform="rotate(-90)" x="-14" y="-6">{flip ? 'IN' : 'OUT'}</text><text transform="rotate(-90)" x="8" y="-6">{flip ? 'OUT' : 'IN'}</text></g>}
+      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}><VSection series={series} lanesHint={lanes} h={h} sp={sp} mesh={meshOn} casement={D.kind !== 'sliding'} />
+        <text transform="rotate(-90)" x={-h / 2 + 8} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'IN' : 'OUT'}</text><text transform="rotate(-90)" x={-h / 2 - 22} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'OUT' : 'IN'}</text></g>}
+      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}><HSection series={series} lanesHint={lanes} w={w} sp={sp} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} />
+        <text x={w + 8} y="8" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'IN' : 'OUT'}</text><text x={w + 8} y="36" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'OUT' : 'IN'}</text></g>}
       {ed && <foreignObject x={ed.x - 34} y={ed.y - 13} width="92" height="26"><div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#fff', border: '1.5px solid #2563eb', borderRadius: 6, padding: '1px 4px', height: 24, boxSizing: 'border-box' }}>
         <input autoFocus type="number" min="1" value={ed.val} onChange={ev => setEd({ ...ed, val: ev.target.value })} onFocus={ev => ev.target.select()}
           onKeyDown={ev => { if (ev.key === 'Enter') { const v = Math.round(+ed.val); if (v > 0) onDim(ed.key, v); setEd(null) } else if (ev.key === 'Escape') setEd(null) }} onBlur={() => setEd(null)}
