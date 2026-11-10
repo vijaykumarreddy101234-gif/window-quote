@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BayDrawing } from './Bay'
+import { PresetV, PresetH, hasPreset } from './PresetSections'
 import { VSection, HSection, VSectionImg, HSectionImg, PanZoom, trackSpec } from './Sections'
 import { useProfiles, profMm } from './profileClean'
 import { CalcPad } from './CalcPad'
@@ -190,8 +191,8 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
     if (rise) { dimEls.push(tickV(oy, y0, ox + w + 26, rise, 'rise'), tickV(y0, oy + h, ox + w + 26, H - rise, 'base')) }
     else if (dimsV.length) { dimsV.forEach(([a, b, v, kk]) => dimEls.push(tickV(a, b, ox + w + 26, v, kk))); const last = dimsV[dimsV.length - 1][1]; dimEls.push(tickV(last, oy + h - frame * .2, ox + w + 26, Math.round(H - dimsV.reduce((s, d) => s + d[2], 0)), 'rest')) }
   }
-  const vSec = (hh, spx, spf) => G(codes.frame) ? <VSectionImg codes={codes} G={G} h={hh} sp={spx} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={hh} sp={spf} mesh={meshOn} casement={D.kind !== 'sliding'} />
-  const hSec = (ww, spx, spf) => { const f = ww / w, pn = secPanes.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })), cl = colInfo.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })); return G(codes.frame) ? <HSectionImg codes={codes} G={G} w={ww} sp={spx} lanes={lanes} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={ww} sp={spf} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> }
+  const vSec = (hh, spx, spf) => D.kind === 'sliding' && G(codes.frame) && hasPreset(codes) ? <PresetV codes={codes} G={G} h={hh} sp={spx} mesh={meshOn} /> : G(codes.frame) ? <VSectionImg codes={codes} G={G} h={hh} sp={spx} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={hh} sp={spf} mesh={meshOn} casement={D.kind !== 'sliding'} />
+  const hSec = (ww, spx, spf) => { const f = ww / w, pn = secPanes.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })), cl = colInfo.map(q => ({ ...q, x0: q.x0 * f, x1: q.x1 * f })); return D.kind === 'sliding' && G(codes.frame) && hasPreset(codes, 'h') ? <PresetH codes={codes} G={G} w={ww} sp={spx} panes={pn} mesh={meshOn} /> : G(codes.frame) ? <HSectionImg codes={codes} G={G} w={ww} sp={spx} lanes={lanes} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={ww} sp={spf} panes={pn} cols={cl} casement={D.kind !== 'sliding'} /> }
   const iso = mode === '3d'
   const psz = mini ? {} : { maxWidth: '100%', height: 'auto', maxHeight: 'calc(100vh - 300px)' }
   return (
