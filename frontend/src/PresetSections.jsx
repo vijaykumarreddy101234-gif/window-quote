@@ -7,6 +7,10 @@ function Part({ P, code, part, m }) {
   return <g transform={`matrix(${m.join(' ')})`}><g transform={`matrix(${inner.join(' ')})`}><image href={P.src} x="0" y="0" width={w} height={h} preserveAspectRatio="none" /></g></g>
 }
 const BLUE = '#4aa3d8', GREY = '#64748b'
+// glass drawn at its real thickness (light-blue pane with a darker edge), like the demo
+const Glass = ({ k, x1, y1, x2, y2, t }) => { const vert = Math.abs(x1 - x2) < Math.abs(y1 - y2), th = Math.max(2, t); return vert
+  ? <rect key={k} x={x1 - th / 2} y={Math.min(y1, y2)} width={th} height={Math.abs(y2 - y1)} fill="#cfe6fa" stroke="#7ab8e8" strokeWidth=".6" />
+  : <rect key={k} x={Math.min(x1, x2)} y={y1 - th / 2} width={Math.abs(x2 - x1)} height={th} fill="#cfe6fa" stroke="#7ab8e8" strokeWidth=".6" /> }
 export const hasPreset = (codes, k = 'v') => { const p = codes && getPreset(pc(codes)); return !!(p && p[k]) }
 const pc = codes => ({ frame: codes.frame, sash: codes.sash, bead: codes.bead, il: codes.il, mesh: codes.mesh, mull: codes.mull })
 
@@ -18,8 +22,8 @@ export function PresetV({ codes, G, h, sp, mesh }) {
   const L = V.lane || 0, gx = V.glass[0] * sp, gy = V.glass[1]
   const lanes = L ? (V.parts.some(p => p[0].startsWith('mesh_sash')) ? 2 : 1) : 0
   const lines = []
-  for (let i = 0; i <= (L ? (mesh ? 1 : 1) : 0); i++) lines.push(<line key={i} x1={(gy + i * L) * sp} x2={(gy + i * L) * sp} y1={H - gx} y2={gx} stroke={BLUE} strokeWidth={Math.max(1, V.glass[5] * sp * .45)} />)
-  if (!L) lines.push(<line key="c" x1={gy * sp} x2={gy * sp} y1={H - gx} y2={gx} stroke={BLUE} strokeWidth={Math.max(1, V.glass[5] * sp * .45)} />)
+  for (let i = 0; i <= (L ? (mesh ? 1 : 1) : 0); i++) lines.push(<Glass key={i} x1={(gy + i * L) * sp} x2={(gy + i * L) * sp} y1={H - gx} y2={gx} t={V.glass[5] * sp} />)
+  if (!L) lines.push(<Glass key="c" x1={gy * sp} x2={gy * sp} y1={H - gx} y2={gx} t={V.glass[5] * sp} />)
   if (mesh && L) { const my = ((V.meshY || 102.37) - 11) * sp; lines.push(<line key="m" x1={my} x2={my} y1={H - 42 * sp} y2={42 * sp} stroke={GREY} strokeWidth=".9" strokeDasharray="2 1.5" />) }
   return <g>{lines}{V.parts.map((p, i) => <Part key={'s' + i} P={G(p[1])} code={p[1]} part={p} m={sill} />)}{V.parts.map((p, i) => <Part key={'h' + i} P={G(p[1])} code={p[1]} part={p} m={head} />)}</g>
 }
@@ -35,7 +39,7 @@ export function PresetH({ codes, G, w, sp, panes = [], mesh }) {
   const cx = (x0 + x1) / 2, ps = panes.filter(q => !q.mesh)
   const nl = Math.max(1, ...panes.map(q => q.lane + 1))
   panes.forEach((q, i) => { const y = q.mesh ? ((V.meshY || 102.37) - 11) * sp : (Hh.glass[1] - lane + (q.lane || 0) * lane) * sp
-    out.push(<line key={'g' + i} x1={q.x0 + 4 * sp} x2={q.x1 - 4 * sp} y1={y} y2={y} stroke={q.mesh ? GREY : BLUE} strokeWidth={q.mesh ? .9 : Math.max(1, Hh.glass[5] * sp * .45)} strokeDasharray={q.mesh ? '2 1.5' : undefined} />) })
+    out.push(q.mesh ? <line key={'g' + i} x1={q.x0 + 4 * sp} x2={q.x1 - 4 * sp} y1={y} y2={y} stroke={GREY} strokeWidth=".9" strokeDasharray="2 1.5" /> : <Glass key={'g' + i} x1={q.x0 + 4 * sp} x2={q.x1 - 4 * sp} y1={y} y2={y} t={Hh.glass[5] * sp} />) })
   const sparts = V.parts.filter(p => !/^mullion/.test(p[0]))
   sparts.forEach((p, i) => { out.push(<Part key={'l' + i} P={G(p[1])} code={p[1]} part={p} m={left} />, <Part key={'r' + i} P={G(p[1])} code={p[1]} part={p} m={right} />) })
   for (let i = 0; i < panes.length - 1; i++) { if (panes[i].mesh || panes[i + 1].mesh) continue; const mx = panes[i].x1; const m = [sp, 0, 0, sp, mx - cx * sp, 0]
