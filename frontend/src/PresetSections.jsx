@@ -1,8 +1,19 @@
 import { getPreset, PDIM } from './sectionPresets'
+import { VEC } from './profileVec'
+// delta-coded rings -> svg path data (0.1 mm units)
+const ring = r => { let x = 0, y = 0; return r.split(' ').map((t, i) => { const [a, b] = t.split(',').map(Number); if (i === 0) { x = a; y = b; return 'M' + x + ',' + y } x += a; y += b; return 'L' + x + ',' + y }).join('') + 'Z' }
+const PATHS = {}
+const vecPaths = code => { if (PATHS[code]) return PATHS[code]; const v = VEC[code]; if (!v) return null; const rs = s => s ? s.split(';').map(ring).join('') : ''; return PATHS[code] = { body: rs(v[0]) + rs(v[1]), gasket: rs(v[2]) } }
 // Draw one profile drawing at its exact preset placement. m = outer (global -> screen) matrix [a,b,c,d,e,f]
 function Part({ P, code, part, m }) {
-  const d = PDIM[code]; if (!P || !d) return null
+  const d = PDIM[code]; if (!d) return null
+  const vp = vecPaths(code); if (!vp && !P) return null
   const [, , rot, fx, fy, px, py] = part, [w, h] = d, r = rot * Math.PI / 180, c = Math.round(Math.cos(r) * 1e6) / 1e6, s = Math.round(Math.sin(r) * 1e6) / 1e6, a = fx ? -1 : 1, e = fy ? -1 : 1
+  if (vp) { // exact vector outline (profile coordinates, y up)
+    const inner = [c * a, s * a, -s * e, c * e, px, py]
+    return <g transform={`matrix(${m.join(' ')})`}><g transform={`matrix(${inner.join(' ')}) scale(.1)`} fill="#fbfbfa" stroke="#3f4a5a" strokeWidth=".8" strokeLinejoin="round">
+      <path d={vp.body} fillRule="evenodd" vectorEffect="non-scaling-stroke" />{vp.gasket && <path d={vp.gasket} fillRule="evenodd" vectorEffect="non-scaling-stroke" />}</g></g>
+  }
   const inner = [c * a, s * a, s * e, -c * e, px - s * e * h, py + c * e * h]
   return <g transform={`matrix(${m.join(' ')})`}><g transform={`matrix(${inner.join(' ')})`}><image href={P.src} x="0" y="0" width={w} height={h} preserveAspectRatio="none" /></g></g>
 }

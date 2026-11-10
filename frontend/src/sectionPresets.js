@@ -9,7 +9,7 @@ const lane = 49.9
 
 // sliding (premium / eco); returns { v:{parts,glass}, h:{parts,glass} } in preset coordinates
 function sliding(kind, c) {
-  const { sash, bead, il, mesh, mull, frame } = c, sw = Math.round((PDIM[sash] || [59])[0]), bw = beadW(bead), withMesh = !!mesh
+  const { sash, bead, il, frame } = c, mesh = c.mesh ? 'RSM-53M' : null, mull = null, sw = Math.round((PDIM[sash] || [59])[0]), bw = beadW(bead), withMesh = !!mesh
   if (kind === 'premium') {
     const y1 = 27.05 - bw, gy = { 24.5: -2.92, 17.5: 0.6, 11.5: 3.55 }[bw] ?? (y1 - 5.47), bx = 42.01 + sw - 22.02
     const v = [['frame', frame, 90, 0, 1, 0, 0], ['sash@1', sash, 0, 0, 1, 42.01, 27.05], ['sash@2', sash, 0, 0, 1, 42.01, 76.95], ['bead@1', bead, 90, 0, 1, bx, y1], ['bead@2', bead, 90, 0, 1, bx, y1 + lane]]
