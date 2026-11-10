@@ -85,16 +85,20 @@ export function PresetHCas({ codes, G, w, sp, cols = [], glassMm = 5 }) {
   out.push(P(Hh.frame, left, 'fl'), P(Hh.frame, right, 'fr'))
   const edge = (col, m, tag) => { if (!col) return; if (col.open) out.push(P(Hh.sash, m, tag + 's'), P(Hh.bead, m, tag + 'b')); else out.push(P(Hh.fixedBead, m, tag + 'fb')) }
   edge(cols[0], left, 'l'); edge(cols[cols.length - 1], right, 'r')
-  // mullions between columns, with a leaf hung on each opening side
+  // mullions between columns. A leaf hung on the mullion overlaps it by the same 28.1 mm it overlaps the frame
+  // (measured on the demo: sash edge 28.4 mm inside the mullion edge, mullion centred on the column boundary).
+  const OV = 28.1, mw = Hh.mullW, sashW = (PDIM[Hh.sash[1]] || [78])[0], beadOff = Hh.bead[5] - Hh.sash[5], gOff = Hh.glassSash[0] - Hh.sash[5]
   for (let i = 0; i < cols.length - 1; i++) {
-    const b = cols[i].x1, mx = b - Hh.mullW * sp / 2
+    const b = cols[i].x1, mx = b - mw * sp / 2
     if (Hh.mullion) out.push(P(Hh.mullion, [sp, 0, 0, sp, mx, 0], 'm' + i))
-    const lm = [-sp, 0, 0, sp, mx + Hh.mullW * sp, 0], rm = [sp, 0, 0, sp, mx, 0]
-    const hang = (col, m, tag) => { if (col.open) out.push(P(['sash', Hh.sash[1], 0, 0, 1, Hh.sashOnMullion, Hh.sash[6]], m, tag + 's'), P(['bead', Hh.bead[1], 90, 0, 1, Hh.sashOnMullion + (Hh.bead[5] - Hh.sash[5]), Hh.bead[6]], m, tag + 'b')); else out.push(P(['bead@fixed', Hh.fixedBead[1], 90, Hh.fixedBead[3], 1, Hh.mullW - 26.04, Hh.fixedBead[6]], m, tag + 'fb')) }
+    // right of the mullion (column i+1): sash starts at mullion edge − overlap; left of it (column i): mirrored, sash ends at mullion left edge + overlap
+    const rm = [sp, 0, 0, sp, mx + (mw - OV) * sp, 0], lm = [-sp, 0, 0, sp, mx + OV * sp, 0]
+    const hang = (col, m, tag) => { if (col.open) out.push(P(['sash', Hh.sash[1], 0, 0, 1, 0, Hh.sash[6]], m, tag + 's'), P(['bead', Hh.bead[1], 90, 0, 1, beadOff, Hh.bead[6]], m, tag + 'b')); else out.push(P(['bead@fixed', Hh.fixedBead[1], 90, Hh.fixedBead[3], 1, mw - 26.04 - (mw - OV), Hh.fixedBead[6]], m, tag + 'fb')) }
     hang(cols[i], lm, 'ml' + i); hang(cols[i + 1], rm, 'mr' + i)
   }
-  // glass per column, at the sash or fixed glazing depth
-  cols.forEach((c, i) => { const g = c.open ? Hh.glassSash : Hh.glassFixed, inset = (i === 0 ? g[0] : (c.open ? Hh.sashOnMullion + (g[0] - Hh.sash[5]) : Hh.mullW / 2 + 10)) * sp, insetR = (i === cols.length - 1 ? g[0] : (c.open ? Hh.sashOnMullion + (g[0] - Hh.sash[5]) : Hh.mullW / 2 + 10)) * sp
-    out.unshift(<Glass key={'g' + i} x1={c.x0 + inset} x2={c.x1 - insetR} y1={g[1] * sp} y2={g[1] * sp} t={glassT} />) })
+  // glass per column: between the two beads of an opening leaf, or in the fixed glazing rebate
+  cols.forEach((c, i) => { const g = c.open ? Hh.glassSash : Hh.glassFixed
+    const insL = i === 0 ? g[0] : (c.open ? mw / 2 - OV + gOff : mw / 2 + 10), insR = i === cols.length - 1 ? g[0] : (c.open ? mw / 2 - OV + gOff : mw / 2 + 10)
+    out.unshift(<Glass key={'g' + i} x1={c.x0 + insL * sp} x2={c.x1 - insR * sp} y1={g[1] * sp} y2={g[1] * sp} t={glassT} />) })
   return <g>{out}</g>
 }
