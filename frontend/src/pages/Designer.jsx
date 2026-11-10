@@ -230,8 +230,15 @@ export default function Designer() {
             <Radios star label="ESPAG" opts={['Auto — CASEMENT DOOR ESPAG WITH CYLINDER 1800', 'CASEMENT DOOR ESPAG WITH CYLINDER 1600', 'CASEMENT DOOR ESPAG WITH CYLINDER 1800']} val={(dsn.hw || {}).espag?.v} on={v => hw('espag', 'v', v)} />
             <Radios label="SHOOT BOLT" opts={['None', 'SHOOT BOLT']} val={(dsn.hw || {}).bolt?.v} on={v => hw('bolt', 'v', v)} /></>
           : <>
-            <Radios star label="HINGE / STAY" opts={['Auto — FRICTION STAY 10"', 'FRICTION STAY 12"', 'FRICTION STAY 14"', 'FRICTION STAY 16"']} val={(dsn.hw || {}).stay?.v} on={v => hw('stay', 'v', v)} />
-            <Radios star label="HANDLE" opts={['Auto — CASEMENT WINDOW HANDLE', 'CASEMENT WINDOW HANDLE WITH KEY']} val={(dsn.hw || {}).handle?.v} on={v => hw('handle', 'v', v)} />
+            <div className="muted" style={{ fontSize: 12.5 }}>Casement window · {panes.length} sash{panes.length === 1 ? '' : 'es'} ({panes.join(', ')})</div>
+            {panes.length > 1 && <Radios label="APPLY TO" opts={[`All ${panes.length} casement window sashes`, ...panes.map(p => p + ' only')]} val={(dsn.hw || {}).applyTo?.v} on={v => hw('applyTo', 'v', v)} />}
+            <Radios star label="HINGE TYPE" opts={['Friction hinge', '2D hinge']} val={(dsn.hw || {}).hingeType?.v || 'Friction hinge'} on={v => hw('hingeType', 'v', v)} />
+            {(dsn.hw || {}).hingeType?.v === '2D hinge'
+              ? <Radios star label="2D HINGE" opts={['Auto — 2D HINGES', '2D HINGES', 'BUTT HINGES']} val={(dsn.hw || {}).hinge?.v} on={v => hw('hinge', 'v', v)} />
+              : <Radios star label="FRICTION HINGE" opts={['Auto — FRICTION STAY 10"', 'FRICTION STAY 10"', 'FRICTION STAY 12"', 'FRICTION STAY 14"', 'FRICTION STAY 16"', 'FRICTION STAY 18"', 'FRICTION STAY 20"', 'FRICTION STAY 22"', 'FRICTION STAY 24"', 'FRICTION STAY 8"']} val={(dsn.hw || {}).stay?.v} on={v => hw('stay', 'v', v)} />}
+            <Radios star label="HANDLE" opts={['Auto — CASEMENT WINDOW HANDLE', 'CASEMENT WINDOW HANDLE', 'COCKSPUR HANDLE', 'ESPAG HANDLE WITH KEY', 'ESPAG HANDLE WITHOUT KEY', 'FLY MESH HANDLE']} val={(dsn.hw || {}).handle?.v} on={v => hw('handle', 'v', v)} />
+            <Radios star label="ESPAG" opts={['Auto — CASEMENT 15MM BS ESPAG 800', ...[15, 20, 22, 30].flatMap(b => [400, 600, 800].map(l => `CASEMENT ${b}MM BS ESPAG ${l}`))]} val={(dsn.hw || {}).espag?.v} on={v => hw('espag', 'v', v)} />
+            <Radios label="CYLINDER" opts={['None', 'CYLINDER']} val={(dsn.hw || {}).cylinder?.v} on={v => hw('cylinder', 'v', v)} />
             <Radios label="STRIKER" opts={['Auto — CMT ESPAG STRIKER', 'None']} val={(dsn.hw || {}).striker?.v} on={v => hw('striker', 'v', v)} /></>}
           <div className="sec">Gaskets</div>
           <Radios label="AUTOMATIC GASKET" opts={['No gasket', 'CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK']} val={(dsn.hw || {}).gasket?.v} on={v => hw('gasket', 'v', v)} />

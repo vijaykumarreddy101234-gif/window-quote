@@ -128,7 +128,8 @@ function compute(d, ctx) {
         } else if (opening) {
           const sw = cw - 2 * FRAME_FACE + 2 * OVERLAP, sh = ch - 2 * FRAME_FACE + 2 * OVERLAP;
           sashLens.push(sw + 2 * w, sw + 2 * w, sh + 2 * w, sh + 2 * w);
-          const gw = sw - 2 * SASH_FACE, gh = sh - 2 * SASH_FACE;
+          // daylight as the demo measures it: 90 mm off at a jamb (frame + sash + bead), 67 mm off at a mullion (sash hung 28 mm over the mullion)
+          const colW = W * c.w / totalW, gw = Math.round(colW - (ci === 0 ? 90 : 67) - (ci === cols.length - 1 ? 90 : 67)), gh = sh - 2 * SASH_FACE;
           beadLens.push(gw - 4, gw - 4, gh - 4, gh - 4); glassPanes.push({ name: 'C' + idx, w: gw, h: gh });
           riM += ((sw + sh) * 2 - 400) / 1000;
           if (r.op === 'LH' || r.op === 'RH') { hardware += 50 + 2 * 137.5 + 8.8; if (sh >= 800) { hardware += 210; hw.push({ name: 'CASEMENT 15MM BS ESPAG 800 · WHITE', qty: 1, rate: 210 }) } hw.push({ name: 'CASEMENT WINDOW HANDLE · WHITE', qty: 1, rate: 50 }, { name: 'FRICTION STAY 10" · WHITE', qty: 2, rate: 137.5 }, { name: 'CMT ESPAG STRIKER · WHITE', qty: 1, rate: 8.8 }); }
@@ -152,6 +153,7 @@ function compute(d, ctx) {
   }
   if (d.georgian) { const gl = glassPanes.reduce((a, g) => a + (g.w + g.h) / 1000, 0); add('Georgian bar', 'RSA-25GB', [Math.round(gl * 1000)]); }
   // ---- hardware choices (Hardware tab) and finish: replace default items by the chosen catalogue items ----
+  { const m = {}; hw.forEach(h => { const k = h.name + '|' + h.rate; if (m[k]) m[k].qty += h.qty; else m[k] = { ...h } }); hw.length = 0; Object.values(m).forEach(h => hw.push(h)) }
   if (ctx.hwFind) {
     const sel = d.hw || {}, win = d.colour && d.colour.Window, fin = (d.hwFinish && d.hwFinish !== 'Match window color') ? d.hwFinish.toUpperCase() : (win && win !== 'White' ? win.toUpperCase() : 'WHITE');
     const clean = v => String(v).replace(/\s*·.*$/, '').replace(/\s*\[.*\]$/, '').trim(), pick = k => { const v = sel[k] && sel[k].v; return v && !/^Auto/.test(v) ? v : null };
@@ -164,7 +166,12 @@ function compute(d, ctx) {
     if (d.kind === 'sliding') { if (pick('roller')) swap(/WHEEL/, pick('roller')); if (pick('lock') && !/^TOUCH LOCK$/i.test(pick('lock'))) swap(/TOUCH LOCK (LEFT|RIGHT)/, pick('lock'), 1, true); if (sel.altrack && sel.altrack.v === 'Included') { const f = ctx.hwFind('ALUMINIUM TRACK', fin); if (f) { const m = +(W / 1000).toFixed(2); hardware += f.rate * m; hw.push({ name: f.name, qty: m, rate: f.rate }) } }; if (pick('handle') && door) swap(/D HANDLE|C HANDLE/, pick('handle'), 1) }
     else if (door) { const hc = sel.hcount && sel.hcount.v ? +sel.hcount.v : null; if (pick('hinge')) swap(/HINGES/, pick('hinge'), hc); else if (hc) { const h = hw.find(x => /HINGES/.test(x.name)); if (h) { hardware += (hc - h.qty) * h.rate; h.qty = hc } }
       if (pick('handle')) swap(/DOOR HANDLE|LOCKING SET/, pick('handle')); if (pick('espag')) swap(/ESPAG/, pick('espag')); if (sel.bolt && sel.bolt.v === 'SHOOT BOLT') swap(/SHOOT BOLT/, 'SHOOT BOLT', 1) }
-    else { if (pick('stay')) swap(/FRICTION STAY/, pick('stay')); if (pick('handle')) swap(/WINDOW HANDLE/, pick('handle')); if (sel.striker && sel.striker.v === 'None') { for (let i = hw.length - 1; i >= 0; i--) if (/STRIKER/.test(hw[i].name)) { hardware -= hw[i].rate * hw[i].qty; hw.splice(i, 1) } } }
+    else { const nOpen = Math.max(1, hw.filter(x => /WINDOW HANDLE/.test(x.name)).reduce((a, x) => a + x.qty, 0))
+      if (sel.hingeType && sel.hingeType.v === '2D hinge') swap(/FRICTION STAY/, pick('hinge') || '2D HINGES'); else if (pick('stay')) swap(/FRICTION STAY/, pick('stay'))
+      if (pick('handle')) { const h = pick('handle'); if (/COCKSPUR/.test(h)) { swap(/WINDOW HANDLE/, 'COCKSPUR HANDLE LEFT'); const w = ctx.hwFind('COCKSPUR HANDLE WEDGE', fin); if (w) { hardware += w.rate * nOpen; hw.push({ name: w.name, qty: nOpen, rate: w.rate }) } } else swap(/WINDOW HANDLE/, h) }
+      if (pick('espag')) { if (hw.some(x => /BS ESPAG/.test(x.name))) swap(/BS ESPAG/, pick('espag')); else { const f = ctx.hwFind(clean(pick('espag')), fin); if (f) { hardware += f.rate * nOpen; hw.push({ name: f.name, qty: nOpen, rate: f.rate }) } } }
+      if (sel.cylinder && sel.cylinder.v === 'CYLINDER') { const c = ctx.hwFind('CYLINDER', fin); if (c) { hardware += c.rate * nOpen; hw.push({ name: c.name, qty: nOpen, rate: c.rate }) } }
+      if (sel.striker && sel.striker.v === 'None') { for (let i = hw.length - 1; i >= 0; i--) if (/STRIKER/.test(hw[i].name)) { hardware -= hw[i].rate * hw[i].qty; hw.splice(i, 1) } } }
     if (fin !== 'WHITE') hw.forEach(h => { if (/ · WHITE$/.test(h.name)) { const f = ctx.hwFind(clean(h.name), fin); if (f && / · /.test(f.name) && !/WHITE$/.test(f.name)) { hardware += (f.rate - h.rate) * h.qty; h.name = f.name; h.rate = f.rate } } })
   }
   { const m = {}; hw.forEach(h => { const k = h.name + '|' + h.rate; if (m[k]) m[k].qty += h.qty; else m[k] = { ...h } }); hw.length = 0; Object.values(m).forEach(h => hw.push(h)) }
