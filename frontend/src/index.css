@@ -531,3 +531,5 @@ body{background:#f0f2f5}
 .dlg h3{margin:0 0 12px;font-size:17px}.dlg p{margin:0 0 14px;color:#334155}
 .dlg-f{display:block;margin-bottom:10px}.dlg-f span{display:block;font-size:12px;color:#64748b;margin-bottom:4px}.dlg-f input{width:100%;box-sizing:border-box}
 .dlg-err{color:#dc2626;font-size:13px;margin-bottom:8px}.dlg-a{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.prof-thumb{position:relative}.prof-plus{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:20px}
+.prof-thumb img{position:relative;background:#fff}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BayDrawing } from './Bay'
-import { VSection, HSection, trackSpec } from './Sections'
+import { VSection, HSection, VSectionImg, HSectionImg, trackSpec } from './Sections'
+import { useProfiles, profMm } from './profileClean'
 // Design-driven elevation drawing (sliding n-panel, grid of casement/fixed/louvre/fan cells, arch, door, bay).
 export function getDesign(item) {
   let d = item.design
@@ -41,6 +42,9 @@ export function archRise(D, W, H) {
 
 export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim, onGeom, onGeomStart }) {
   const [ed, setEd] = useState(null)
+  const cuts0 = (engine && engine.cuts) || [], codeOf = r => (cuts0.find(c => c.role === r) || {}).code
+  const codes = { frame: codeOf('Frame'), sash: codeOf('Sash'), bead: codeOf('Bead'), il: codeOf('Interlock'), mesh: codeOf('Mesh Sash'), mull: codeOf('Mullion') }
+  const G = useProfiles(Object.values(codes))
   const D = design || getDesign(item), W = item.width, H = item.height
   if (D.bay && !mini && D.kind === 'grid' && (D.cols || []).length > 1) return <BayDrawing item={item} design={D} side={side} selected={selected} onSelect={onSelect} />
   const k = mini ? Math.min(150 / W, 150 / H) : Math.min(500 / W, 360 / H), w = W * k, h = H * k
@@ -65,7 +69,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const body = [], grips = [], dimsV = [], dimsH = [], secPanes = [], colInfo = []
   const series = +(engine && engine.series) || +((/(\d+)\s*series/i.exec((item.system || '') + ' ' + (item.name || '')) || [])[1]) || 62
   const meshOn = (D.mesh || 0) > 0 || !!(item.mesh && item.mesh !== 'No mesh'), lanes = D.kind === 'sliding' ? (meshOn ? 3 : (D.panels || 2) > 2 || series >= 80 ? 3 : 2) : undefined
-  const sp = Math.min(.8, 58 / trackSpec(series, lanes).depth)
+  const sp = Math.min(.8, 58 / trackSpec(series, lanes).depth), sp2 = Math.min(1.1, 62 / Math.max(profMm(codes.frame, 62), profMm(codes.sash, 60)))
   let num = 0
   const sel = (i) => onSelect ? { style: { cursor: onCell ? 'crosshair' : 'pointer' }, onClick: (ev) => { onSelect(i); if (onCell) { const r = ev.currentTarget.getBoundingClientRect(); onCell(i, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height) } } } : {}
   const gb = (x, y, ww, hh) => D.georgian ? <g stroke="#94a3b8" strokeWidth="1.2">{[1, 2].map(j => <line key={'v' + j} x1={x + ww * j / 3} x2={x + ww * j / 3} y1={y} y2={y + hh} />)}{[1, 2].map(j => <line key={'h' + j} y1={y + hh * j / 3} y2={y + hh * j / 3} x1={x} x2={x + ww} />)}</g> : null
@@ -195,9 +199,9 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       {body}
       {grips}
       {dimEls}
-      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}><VSection series={series} lanesHint={lanes} h={h} sp={sp} mesh={meshOn} casement={D.kind !== 'sliding'} />
+      {dims && !D.bay && <g transform={`translate(${ox - 104},${oy})`}>{G(codes.frame) ? <VSectionImg codes={codes} G={G} h={h} sp={sp2} lanes={lanes} mesh={meshOn} casement={D.kind !== 'sliding'} /> : <VSection series={series} lanesHint={lanes} h={h} sp={sp} mesh={meshOn} casement={D.kind !== 'sliding'} />}
         <text transform="rotate(-90)" x={-h / 2 + 8} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'IN' : 'OUT'}</text><text transform="rotate(-90)" x={-h / 2 - 22} y="-4" fontSize="7.5" fontWeight="700" fill="#334155" textAnchor="middle">{flip ? 'OUT' : 'IN'}</text></g>}
-      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}><HSection series={series} lanesHint={lanes} w={w} sp={sp} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} />
+      {dims && !D.bay && <g transform={`translate(${ox},${oy + h + 48})`}>{G(codes.frame) ? <HSectionImg codes={codes} G={G} w={w} sp={sp2} lanes={lanes} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} /> : <HSection series={series} lanesHint={lanes} w={w} sp={sp} panes={secPanes} cols={colInfo} casement={D.kind !== 'sliding'} />}
         <text x={w + 8} y="8" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'IN' : 'OUT'}</text><text x={w + 8} y="36" fontSize="7.5" fontWeight="700" fill="#334155">{flip ? 'OUT' : 'IN'}</text></g>}
       {ed && <foreignObject x={ed.x - 34} y={ed.y - 13} width="92" height="26"><div xmlns="http://www.w3.org/1999/xhtml" style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#fff', border: '1.5px solid #2563eb', borderRadius: 6, padding: '1px 4px', height: 24, boxSizing: 'border-box' }}>
         <input autoFocus type="number" min="1" value={ed.val} onChange={ev => setEd({ ...ed, val: ev.target.value })} onFocus={ev => ev.target.select()}

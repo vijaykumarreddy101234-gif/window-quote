@@ -1,5 +1,5 @@
 // S CRAFT brochure cross-section drawings (served from /profiles/<CODE>.png)
-export const profileImg = code => `/profiles/${code}.png`
+export const profileImg = code => (typeof window !== 'undefined' && ((window.__profRaw && window.__profRaw[code]) || (window.__profData && window.__profData[code]))) || `/profiles/${code}.png`
 export const PROFILE_GROUPS = [
   ['Premium sliding series', ['RST-62T', 'RST-92T', 'RST-112T', 'RSS-59SS', 'RSS-67MS', 'RSS-84BS', 'RSM-53M', 'RSM-62MM', 'RSM-42SM', 'RSB-11.5DGB', 'RSB-24.5SB', 'RSI-44IL']],
   ['Eco-sliding series', ['RST-53ET', 'RST-80ET', 'RST-95ET', 'RSS-60ES', 'RSS-75ES', 'RSI-38EIL', 'RSB-17.5EB']],

@@ -4,6 +4,7 @@ import { api, inr2, token, downloadFile } from '../api'
 import { profileImg, PROFILE_GROUPS, groupOf } from '../profileImg'
 import { TYPES, COEF, defaults, blank, ctx, formula, qty } from '../installMap'
 import { askText, askConfirm, say } from '../dialog'
+import { resetProfile } from '../profileClean'
 
 // key -> [label, url slug, icon path, page title, subtitle]
 const TABS = [
@@ -132,7 +133,7 @@ function Company() {
 
 /* ---------- Profile ---------- */
 function Profile() {
-  const [rows, setRows] = useState([]); const pr = useSection('pricing'); const [rate, setRate] = useState(165); const [applied, setApplied] = useState(true); const [cols, setCols] = useState([]); const [colTab, setColTab] = useState('White'); const [modes, setModes] = useState({}); const [zoom, setZoom] = useState(null)
+  const [bust, setBust] = useState(0); const [rows, setRows] = useState([]); const pr = useSection('pricing'); const [rate, setRate] = useState(165); const [applied, setApplied] = useState(true); const [cols, setCols] = useState([]); const [colTab, setColTab] = useState('White'); const [modes, setModes] = useState({}); const [zoom, setZoom] = useState(null)
   useEffect(() => { api('/profiles').then(setRows) }, []); useEffect(() => { if (pr.v) { setRate(pr.v.white_rate); setCols(pr.v.colour_rates || []) } }, [pr.v && pr.v.white_rate])
   const isWhite = colTab === 'White'; const cur = isWhite ? { name: 'White & other colours', rate } : cols.find(c => c.name === colTab) || { rate: 0 }
   const apply = async () => { if (isWhite) await api('/settings/pricing', { method: 'PUT', body: { ...pr.v, white_rate: +rate, colour_rates: cols } }); else await api('/settings/pricing', { method: 'PUT', body: { ...pr.v, colour_rates: cols } }); setApplied(true) }
@@ -147,12 +148,13 @@ function Profile() {
         <div className="ps-rate-row"><span>₹ per kg <span className="ps-info">i</span></span><input type="number" value={cur.rate} onChange={e => { const v = +e.target.value; if (isWhite) setRate(v); else setCols(cols.map(c => c.name === colTab ? { ...c, rate: v } : c)); setApplied(false) }} /><button className="qt-btn-primary ps-btn" disabled={applied} onClick={apply}>Apply rate</button></div>
         <div className="qt-table-wrap" style={{ overflowX: 'auto' }}><table className="ps-table"><thead><tr><th>PROFILE</th><th>ITEM CODE</th><th>DESCRIPTION</th><th>WEIGHT / M (KG)</th><th>PRICE / M</th><th>ALL OTHER COLOURS / M</th></tr></thead>
           <tbody>{[...PROFILE_GROUPS.map(g => g[0]), 'Other'].flatMap(gn => { const list = rows.filter(r => groupOf(r.code) === gn).sort((a, b) => { const gi = (PROFILE_GROUPS.find(g => g[0] === gn) || [0, []])[1]; return gi.indexOf(a.code) - gi.indexOf(b.code) }); return list.length ? [<tr key={'g' + gn} className="ps-group"><td colSpan={6}>{gn}</td></tr>, ...list.map(r => { const m = modes[r.code]; return <tr key={r.id}>
-            <td><button className="prof-thumb" title="View profile drawing" onClick={() => setZoom(r)}><img alt={r.code} loading="lazy" src={profileImg(r.code)} onError={e => { e.currentTarget.style.visibility = 'hidden' }} /></button></td><td>{r.code}</td><td>{r.description}</td><td>{r.weight.toFixed(3)}</td>
+            <td><button className="prof-thumb" title="View profile drawing" onClick={() => setZoom(r)}><span className="prof-plus">＋</span><img alt={r.code} loading="lazy" src={profileImg(r.code) + (bust ? '?v=' + bust : '')} onError={e => { e.currentTarget.style.visibility = 'hidden' }} /></button></td><td>{r.code}</td><td>{r.description}</td><td>{r.weight.toFixed(3)}</td>
             <td><span>{inr2(r.weight * rate)}</span> <span className="ps-mode"><button className={m === 'pm' ? 'on' : ''} onClick={() => setModes({ ...modes, [r.code]: m === 'pm' ? null : 'pm' })}>₹/m instead</button><button className={m === 'kg' ? 'on' : ''} onClick={() => setModes({ ...modes, [r.code]: m === 'kg' ? null : 'kg' })}>own ₹/kg</button></span></td>
             <td><span>—</span> <span className="ps-mode"><button>₹/m instead</button><button>own ₹/kg</button></span></td></tr> })] : [] })}</tbody></table></div>
         {zoom && <div className="prof-modal" onClick={() => setZoom(null)}><div className="prof-modal-card" onClick={e => e.stopPropagation()}>
           <button className="x" aria-label="Close" onClick={() => setZoom(null)}>✕</button>
-          <img alt={zoom.code} src={profileImg(zoom.code)} onError={e => { e.currentTarget.style.display = 'none' }} />
+          <img alt={zoom.code} src={profileImg(zoom.code) + (bust ? '?v=' + bust : '')} onError={e => { e.currentTarget.style.display = 'none' }} onLoad={e => { e.currentTarget.style.display = '' }} />
+          <label className="btn ghost sm" style={{ display: 'inline-block', cursor: 'pointer', margin: '6px 0' }}>Upload / replace drawing<input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={ev => { const f = ev.target.files[0]; if (!f) return; if (f.size > 3.5e6) return say('Please choose a drawing up to 3.5 MB.'); const rd = new FileReader(); rd.onload = async () => { try { await api('/profiles/' + zoom.code + '/image', { method: 'POST', body: { data: rd.result } }); resetProfile(zoom.code); setBust(Date.now()); say('Drawing saved. Cross-sections in the designer now use it automatically.') } catch (e) { say(e.message) } }; rd.readAsDataURL(f) }} /></label>
           <h3>{zoom.description}</h3><div className="muted">{zoom.code} · {groupOf(zoom.code)}</div>
           <div className="prof-facts"><span>Weight / m <b>{zoom.weight.toFixed(3)} kg</b></span><span>Price / m <b>{inr2(zoom.weight * rate)}</b></span></div>
           <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>Cross-section from the S CRAFT profile brochure (dimensions in mm).</div></div></div>}

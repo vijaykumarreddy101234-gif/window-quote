@@ -822,6 +822,14 @@ api.get('/reports/quotations', (req, res) => {
   res.json({ generated: rows.length, approved: rows.filter(approved).length, production: rows.filter(wo).length,
     conversion: rows.length ? +(rows.filter(approved).length / rows.length * 100).toFixed(2) : 0, months: Object.values(months).sort((a, b) => a.month < b.month ? -1 : 1) });
 });
+const PROFDIR = process.env.VERCEL ? '/tmp/profile-images' : path.join(__dirname, 'uploads', 'profiles');
+api.post('/profiles/:code/image', express.json({ limit: '6mb' }), (req, res) => {
+  const code = String(req.params.code || ''); if (!/^[\w.\-]{1,40}$/.test(code)) return res.status(400).json({ error: 'Invalid profile code' });
+  if (!db.prepare('SELECT 1 FROM profiles WHERE code=?').get(code)) return res.status(404).json({ error: 'Unknown profile' });
+  const m = /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/.exec(String(req.body.data || '')); if (!m) return res.status(400).json({ error: 'Send a PNG, JPG or WebP drawing' });
+  const buf = Buffer.from(m[2], 'base64'); if (buf.length > 4e6) return res.status(400).json({ error: 'Drawing is too large (max 4 MB)' });
+  require('fs').mkdirSync(PROFDIR, { recursive: true }); require('fs').writeFileSync(path.join(PROFDIR, code + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1])), buf); res.json({ ok: true });
+});
 api.get('/inventory/profiles', (req, res) => res.json(db.prepare('SELECT * FROM profiles').all()));
 api.get('/inventory/issue-receipt', (req, res) => res.json({ issues: [], receipts: [] }));
 api.get('/inventory/orders', (req, res) => {
@@ -907,6 +915,9 @@ api.get('/quotations/:id/share', (req, res) => {
   const phone = String(c.phone || '').replace(/\D/g, '');
   res.json({ url, message, phone, customer: c.name || '', whatsapp: `https://wa.me/${phone.length === 10 ? '91' + phone : phone}?text=${encodeURIComponent(message)}`, mailto: `mailto:${c.email || ''}?subject=${encodeURIComponent('Quotation ' + q.number)}&body=${encodeURIComponent(message)}` });
 });
+app.get(/^\/profiles\/(clean\/)?([\w.\-]+)\.png$/, (req, res, next) => { // uploaded drawings override the bundled ones and are cleaned in the browser
+  const fs0 = require('fs'), code = req.params[1], f = ['png', 'jpg', 'webp'].map(e => path.join(PROFDIR, code + '.' + e)).find(x => fs0.existsSync(x))
+  if (!f) return next(); if (req.params[0]) return res.status(404).end(); res.sendFile(f) });
 app.use('/api/v1/app', api);
 const dist = path.join(__dirname, '..', 'frontend', 'dist');
 if (require('fs').existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html'))); }

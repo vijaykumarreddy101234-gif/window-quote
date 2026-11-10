@@ -84,3 +84,49 @@ export function HSection({ series, lanesHint, w, sp, panes = [], casement, cols 
   })
   return <g>{out}</g>
 }
+
+// ---------- Real profile drawings (cleaned brochure cross-sections), chosen automatically from the engine's cut list ----------
+import { profMm } from './profileClean'
+const sz = (P, code, sp) => { const m = Math.max(P.w, P.h), mm = profMm(code) * sp; return [P.w / m * mm, P.h / m * mm] }
+// draw a profile with its top-left at (x,y) of the *transformed* box. rot: 0 | 90 | -90, flipY mirrors vertically (applied first)
+function Pimg({ P, code, sp, x, y, rot = 0, flipY = false, flipX = false, op }) {
+  if (!P) return null
+  const [w, h] = sz(P, code, sp), swap = rot !== 0, W = swap ? h : w, H = swap ? w : h
+  return <g transform={`translate(${x + W / 2},${y + H / 2}) rotate(${rot}) scale(${flipX ? -1 : 1},${flipY ? -1 : 1}) translate(${-w / 2},${-h / 2})`} opacity={op}><image href={P.src} x="0" y="0" width={w} height={h} preserveAspectRatio="none" /></g>
+}
+const dimsOf = (P, code, sp, rot = 0) => { const [w, h] = sz(P, code, sp); return rot ? [h, w] : [w, h] }
+export function VSectionImg({ codes, G, h, sp, lanes, casement, mesh }) {
+  const F = G(codes.frame), S = G(codes.sash), B = G(codes.bead), M = G(codes.mesh)
+  if (!F) return null
+  const [tw, th] = dimsOf(F, codes.frame, sp), ln = casement ? 1 : (lanes || 2), lw = tw / ln
+  const out = [<Pimg key="h" P={F} code={codes.frame} sp={sp} x={0} y={0} flipY />, <Pimg key="s" P={F} code={codes.frame} sp={sp} x={0} y={h - th} />]
+  const sash = (P, code, cx, key, line, dash) => { if (!P) return
+    const [sw, sh] = dimsOf(P, code, sp), x = cx - sw / 2, yb = h - th + th * .5 - sh, yt = th * .5
+    out.push(<Pimg key={key + 'b'} P={P} code={code} sp={sp} x={x} y={yb} />, <Pimg key={key + 't'} P={P} code={code} sp={sp} x={x} y={yt} flipY />)
+    const gx = x + sw * .3
+    out.push(<line key={key + 'g'} x1={gx} x2={gx} y1={yt + sh * .6} y2={yb + sh * .4} stroke={line} strokeWidth={dash ? 1.2 : 2.2} strokeDasharray={dash ? '2 1.5' : undefined} />)
+    if (!dash && B) { const [bw, bh] = dimsOf(B, codes.bead, sp); out.push(<Pimg key={key + 'bb'} P={B} code={codes.bead} sp={sp} x={gx + 1} y={yb + sh * .4 - bh * .1} />, <Pimg key={key + 'bt'} P={B} code={codes.bead} sp={sp} x={gx + 1} y={yt + sh * .6 - bh * .9} flipY />) } }
+  if (casement) sash(S, codes.sash, tw * .45, 'c', '#4aa3d8')
+  else { sash(S, codes.sash, lw * .5, 'a', '#4aa3d8'); if (mesh && ln > 2) sash(M || S, codes.mesh || codes.sash, lw * 2.5, 'm', '#64748b', true) }
+  return <g>{out}</g>
+}
+export function HSectionImg({ codes, G, w, sp, lanes, casement, panes = [], cols = [] }) {
+  const F = G(codes.frame), S = G(codes.sash), IL = G(codes.il), M = G(codes.mesh), MU = G(codes.mull)
+  if (!F) return null
+  const [tw, th] = dimsOf(F, codes.frame, sp), ln = casement ? 1 : (lanes || 2), lw = tw / ln
+  const out = [<Pimg key="jl" P={F} code={codes.frame} sp={sp} x={0} y={0} rot={90} />, <Pimg key="jr" P={F} code={codes.frame} sp={sp} x={w - th} y={0} rot={-90} />]
+  if (casement) {
+    out.push(<line key="gl" x1={th * .6} x2={w - th * .6} y1={tw * .45} y2={tw * .45} stroke="#4aa3d8" strokeWidth="2.2" />)
+    cols.slice(0, -1).forEach((c, i) => { if (MU) { const [mw, mh] = dimsOf(MU, codes.mull, sp, 90); out.push(<Pimg key={'mu' + i} P={MU} code={codes.mull} sp={sp} x={c.x1 - mw / 2} y={tw * .45 - mh * .5} rot={90} />) } })
+    cols.forEach((c, i) => { if (c.open && S) { const [sw] = dimsOf(S, codes.sash, sp, 90); out.push(<Pimg key={'a' + i} P={S} code={codes.sash} sp={sp} x={c.x0 + 1} y={tw * .1} rot={90} />, <Pimg key={'b' + i} P={S} code={codes.sash} sp={sp} x={c.x1 - sw - 1} y={tw * .1} rot={-90} />) } })
+    return <g>{out}</g>
+  }
+  panes.forEach((p, i) => {
+    const P = p.mesh && M ? M : S, code = p.mesh && M ? codes.mesh : codes.sash; if (!P) return
+    const [sw, sh] = dimsOf(P, code, sp, 90), cy = (p.lane + .5) * lw, y = cy - sh / 2
+    out.push(<line key={'g' + i} x1={p.x0 + sw * .5} x2={p.x1 - sw * .5} y1={cy} y2={cy} stroke={p.mesh ? '#64748b' : '#4aa3d8'} strokeWidth={p.mesh ? 1.2 : 2.2} strokeDasharray={p.mesh ? '2 1.5' : undefined} />,
+      <Pimg key={'l' + i} P={P} code={code} sp={sp} x={p.x0} y={y} rot={90} />, <Pimg key={'r' + i} P={P} code={code} sp={sp} x={p.x1 - sw} y={y} rot={-90} />)
+    if (IL && i < panes.length - 1 && !p.mesh) { const [iw, ih] = dimsOf(IL, codes.il, sp, 90); out.push(<Pimg key={'il' + i} P={IL} code={codes.il} sp={sp} x={p.x1 - iw * .5} y={cy - ih * .5} rot={90} />) }
+  })
+  return <g>{out}</g>
+}
