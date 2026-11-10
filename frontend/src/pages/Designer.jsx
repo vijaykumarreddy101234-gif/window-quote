@@ -25,6 +25,8 @@ const Ic = ({ k }) => {
 const Sheet = ({ title, onClose, children }) => <div className="sheet"><div className="sheet-h"><b>{title}</b><button className="x" onClick={onClose} aria-label="Close">✕</button></div><div className="sheet-b">{children}</div></div>
 const Radios = ({ label, opts, val, on, star }) => <div className="hwgrp"><div className="lab">{label}{star ? ' *' : ''}</div>{opts.map(o => <button key={o} className={'opt' + ((val ?? opts[0]) === o ? ' on' : '')} onClick={() => on(o)}>{o}</button>)}</div>
 
+const ShapeIcon = ({ v, on }) => { const c = on ? '#2563eb' : '#111827', P = { rect: 'M6 6H34V30H6Z', arch: 'M6 30V16Q6 4 20 4Q34 4 34 16V30Z', half: 'M6 30V20A14 14 0 0 1 34 20V30Z', multi: 'M6 30V14L20 4L34 14V30Z', corner: 'M4 28L20 6L36 28', splay: 'M4 28L12 8H28L36 28', box: 'M8 28V8H32V28' }[v] || 'M6 6H34V30H6Z'
+  return <svg width="40" height="34" viewBox="0 0 40 34" fill={v === 'rect' && on ? '#dbeafe' : 'none'} stroke={c} strokeWidth="2.2" strokeLinejoin="round" style={{ display: 'block', margin: '0 auto 4px' }}><path d={P} /></svg> }
 export default function Designer() {
   const { id, itemId } = useParams(); const nav = useNavigate()
   const [d, setD] = useState(null); const [mode, setMode] = useState(new URLSearchParams(location.search).get('mode')||'2d'); const [side, setSide] = useState('inside'); const [src, setSrc] = useState('live')
@@ -160,7 +162,7 @@ export default function Designer() {
         {tool === 'shapes' && <Sheet title="SHAPES & BAYS" onClose={close}>
           <p className="muted" style={{ marginTop: 0 }}>Choose a shape, adjust its preview, then apply. Dimensions use your selected units.</p>
           <div className="sec">Choose shape or bay</div>
-          <div className="cards">{SHAPES.map(([v, l]) => <button key={v} className={'dcard sq' + (shape === v ? ' on' : '')} onClick={() => setShape(v)}><b>{l}</b></button>)}</div>
+          <div className="cards">{SHAPES.map(([v, l]) => <button key={v} className={'dcard sq' + (shape === v ? ' on' : '')} onClick={() => setShape(v)}><ShapeIcon v={v} on={shape === v} /><b>{l}</b></button>)}</div>
           <p className="muted" style={{ fontSize: 12.5 }}>Fixed arch heads: profile and bead arc length + 30% bending wastage; GI at net arc length. Straight sections and mullions use normal joint allowances. Apply uses the quotation system’s 60 mm casement outer; select Engine pricing for quantities. Multi-faced frames remain manual quotes. Bays retain separate framed units.</p>
           <button className="btn" disabled={!edit} onClick={() => { push({ ...dsn, shape: ['rect', 'arch', 'half'].includes(shape) ? shape : 'rect', bay: ['corner', 'splay', 'box'].includes(shape), bayType: ['corner', 'splay', 'box'].includes(shape) ? shape : undefined }); close() }}>Apply</button>
         </Sheet>}
@@ -216,7 +218,8 @@ export default function Designer() {
             <Radios star label="ROLLER" opts={['Auto — SINGLE WHEEL WITH GROOVE', 'DOUBLE WHEEL ADJUSTABLE WITH GROOVE', 'DOUBLE WHEEL WITH GROOVE', 'DOUBLE WHEEL WITHOUT GROOVE', 'FLY MESH ROLLER', 'SINGLE WHEEL WITH GROOVE', 'SINGLE WHEEL WITHOUT GROOVE']} val={(dsn.hw || {}).roller?.v} on={v => hw('roller', 'v', v)} />
             <Radios star label="TOUCH LOCK" opts={['Auto — TOUCH LOCK', 'TOUCH LOCK']} val={(dsn.hw || {}).lock?.v} on={v => hw('lock', 'v', v)} />
             <Radios label="ALUMINIUM TRACK" opts={['Not included', 'Included']} val={(dsn.hw || {}).altrack?.v} on={v => hw('altrack', 'v', v)} />
-            {!!dsn.mesh && <Radios label="Mesh type" opts={['Aluminium mesh — ₹22.00 / sq ft', 'Fibre mesh — ₹12.00 / sq ft', 'SS mesh — ₹30.00 / sq ft']} val={{ 'Aluminium mesh': 'Aluminium mesh — ₹22.00 / sq ft', 'Fibre mesh': 'Fibre mesh — ₹12.00 / sq ft', 'SS mesh': 'SS mesh — ₹30.00 / sq ft' }[dsn.meshType || 'SS mesh']} on={v => push({ ...dsn, meshType: v.split(' — ')[0] })} />}</>
+            {(dsn.hw || {}).altrack?.v === 'Included' && <><div className="lab">ALUMINIUM TRACK ITEM</div><select className="sel" disabled={!edit} value={(dsn.hw || {}).altrackItem?.v || ''} onChange={ev => hw('altrackItem', 'v', ev.target.value)}><option value="">Choose an item</option><option>ALUMINIUM TRACK</option></select></>}
+            {!!dsn.mesh && <Radios label="Mesh type" opts={['Default mesh rate', 'Aluminium mesh — ₹22.00 / sq ft', 'Fibre mesh — ₹12.00 / sq ft', 'SS mesh — ₹30.00 / sq ft']} val={{ 'Aluminium mesh': 'Aluminium mesh — ₹22.00 / sq ft', 'Fibre mesh': 'Fibre mesh — ₹12.00 / sq ft', 'SS mesh': 'SS mesh — ₹30.00 / sq ft' }[dsn.meshType || 'SS mesh']} on={v => v === 'Default mesh rate' ? push({ ...dsn, meshType: undefined }) : push({ ...dsn, meshType: v.split(' — ')[0] })} />}</>
           : door ? <>
             <div className="muted" style={{ fontSize: 12.5 }}>Casement door · 1 sash ({panes[0]})</div>
             <Radios star label="3D / 2D HINGE" opts={['Auto — 3D HINGES', '2D HINGES', '3D HINGES', 'BUTT HINGES']} val={(dsn.hw || {}).hinge?.v} on={v => hw('hinge', 'v', v)} />
@@ -228,7 +231,12 @@ export default function Designer() {
             <Radios star label="HINGE / STAY" opts={['Auto — FRICTION STAY 10"', 'FRICTION STAY 12"', 'FRICTION STAY 14"', 'FRICTION STAY 16"']} val={(dsn.hw || {}).stay?.v} on={v => hw('stay', 'v', v)} />
             <Radios star label="HANDLE" opts={['Auto — CASEMENT WINDOW HANDLE', 'CASEMENT WINDOW HANDLE WITH KEY']} val={(dsn.hw || {}).handle?.v} on={v => hw('handle', 'v', v)} />
             <Radios label="STRIKER" opts={['Auto — CMT ESPAG STRIKER', 'None']} val={(dsn.hw || {}).striker?.v} on={v => hw('striker', 'v', v)} /></>}
-          <div className="sec">Gaskets</div><div className="muted">Installation material · {door ? 'Casement door' : dsn.kind === 'sliding' ? 'Sliding window' : 'Casement window'}</div>
+          <div className="sec">Gaskets</div>
+          <Radios label="AUTOMATIC GASKET" opts={['No gasket', 'CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK']} val={(dsn.hw || {}).gasket?.v} on={v => hw('gasket', 'v', v)} />
+          {!!dsn.mesh && <Radios label="MESH GASKET" opts={['Auto — O TYPE GASKET · ASH BLACK', ...['CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK'].filter(g => !g.startsWith('O TYPE'))]} val={(dsn.hw || {}).meshGasket?.v} on={v => hw('meshGasket', 'v', v)} />}
+          <div className="muted" style={{ fontSize: 12.5, margin: '6px 0' }}>These profiles come with their gasket fitted, so none is added.</div>
+          {e && (e.gaskets || []).map(g => <div key={g.code + g.name} className="muted" style={{ fontSize: 13 }}>{g.name} · Mesh net · {g.m} m · {inr2(g.m * g.rate)}</div>)}
+          <div className="muted">Installation material · {door ? 'Casement door' : dsn.kind === 'sliding' ? 'Sliding window' : 'Casement window'}</div>
           {e && e.hardware.length > 0 && <table style={{ marginTop: 10 }}><thead><tr><th>Item</th><th>Qty</th><th>Rate</th></tr></thead><tbody>{e.hardware.map(h => <tr key={h.name}><td>{h.name}</td><td>{h.qty}</td><td>{inr2(h.rate)}</td></tr>)}</tbody></table>}
         </Sheet>}
         {tool === 'glazing' && <Sheet title="GLAZING" onClose={close}>
