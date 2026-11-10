@@ -116,7 +116,7 @@ export default function Designer() {
         </div>
       </div>
 
-      <div className="dz-float"><div className="mbases hide-m">Measurement bases: ordered overall frame · ordered pane partitions · daylight · glass cut</div><div className="d-tools card">
+      <div className="dz-float"><div className="mbases hide-m">Measurement bases: ordered overall frame · ordered pane partitions · daylight · glass cut{edit && mode === '2d' && <> · <b style={{ color: '#2563eb' }}>Drag the blue handles to move mullions</b></>}</div><div className="d-tools card">
         <button className="icon-btn" disabled={!hist.length} onClick={undo} aria-label="Undo">↶</button><button className="icon-btn" disabled={!fut.length} onClick={redo} aria-label="Redo">↷</button>
         <button className={'pill-btn' + (mode === '2d' ? ' solid' : '')} onClick={() => setMode('2d')}>▯ 2D</button>
         <button className={'pill-btn' + (mode === '3d' ? ' solid' : '')} onClick={() => setMode('3d')}>◈ 3D</button>
@@ -131,7 +131,7 @@ export default function Designer() {
       <div className={'dz-canvas' + (tool && LEFT.includes(tool) ? ' hl' : '') + (tool && RIGHT.includes(tool) ? ' hr' : '')} style={{ cursor: hand ? 'grab' : 'default' }} onMouseMove={ev => { if (hand && ev.buttons === 1) setPan(p => [p[0] + ev.movementX, p[1] + ev.movementY]) }}>
         {mode === '3d' ? <div className="card v3card"><Window3D item={it} design={dsn} engine={e} /></div> :
         <div className="stage" style={{ transform: `translate(${pan[0]}px,${pan[1]}px) scale(${zoom})`, transition: 'transform .05s' }}>
-          <WindowSvg item={it} engine={e} mode={mode} side={side} dims design={dsn} selected={sel} onSelect={i => { setSel(i); if (!dv) setTool('inspect') }} onCell={dv ? onCell : undefined} onDim={edit ? onDim : undefined} />
+          <WindowSvg item={it} engine={e} mode={mode} side={side} dims design={dsn} selected={sel} onSelect={i => { setSel(i); if (!dv) setTool('inspect') }} onCell={dv ? onCell : undefined} onDim={edit ? onDim : undefined} onGeom={edit && !dv ? (fn => setDsn(d => fn(d))) : undefined} onGeomStart={() => { setHist(h => [...h, dsn]); setFut([]) }} />
         </div>}
       </div>
 

@@ -38,7 +38,7 @@ export function archRise(D, W, H) {
   return 0
 }
 
-export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim }) {
+export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = false, mini = false, design, selected, onSelect, onCell, onDim, onGeom, onGeomStart }) {
   const [ed, setEd] = useState(null)
   const D = design || getDesign(item), W = item.width, H = item.height
   if (D.bay && !mini && D.kind === 'grid' && (D.cols || []).length > 1) return <BayDrawing item={item} design={D} side={side} selected={selected} onSelect={onSelect} />
@@ -50,7 +50,18 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const fillP = PROF[D.colour?.Window] || '#fbfbfa', tint = TINT[D.colour?.Glass]
   const rise = archRise(D, W, H), rk = rise * k, tbar = rise ? Math.max(5, 40 * k) : 0
   const gsz = (nm, x, y) => { const p = engine && engine.panes && engine.panes.find(q => q.name === nm); return p && !p.mesh ? <text key={'gs' + nm} x={x} y={y} fontSize="5.5" textAnchor="middle" fill="#64748b">{Math.round(p.w)} × {Math.round(p.h)}</text> : null }
-  const body = [], dimsV = [], dimsH = []
+  // draggable mullions / transoms: fn(svgX, svgY) -> (design) => design
+  const drag = fn => ev => {
+    if (!onGeom) return; ev.stopPropagation(); ev.preventDefault(); const svg = ev.currentTarget.ownerSVGElement; let first = true
+    const mv = e2 => { const pt = svg.createSVGPoint(); pt.x = e2.clientX; pt.y = e2.clientY; const q = pt.matrixTransform(svg.getScreenCTM().inverse()); if (first) { first = false; onGeomStart && onGeomStart() } onGeom(fn(q.x, q.y)) }
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up) }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
+  }
+  const grip = (key, x, y, len, vertical, fn) => onGeom && !mini ? <g key={key} className="geom-grip" style={{ cursor: vertical ? 'ew-resize' : 'ns-resize', touchAction: 'none' }} onPointerDown={drag(fn)}>
+    <rect x={vertical ? x - 9 : x} y={vertical ? y : y - 9} width={vertical ? 18 : len} height={vertical ? len : 18} fill="transparent" />
+    <rect x={vertical ? x - 3.5 : x + len / 2 - 14} y={vertical ? y + len / 2 - 14 : y - 3.5} width={vertical ? 7 : 28} height={vertical ? 28 : 7} rx="3.5" fill="#2563eb" stroke="#fff" strokeWidth="1" /></g> : null
+  const clampSplit = (norm, i, b) => { const cum = norm.slice(0, i).reduce((a, c) => a + c, 0), p = norm[i] + norm[i + 1], mn = Math.min(.1, p / 3); return [Math.min(p - mn, Math.max(mn, b - cum)), p] }
+  const body = [], grips = [], dimsV = [], dimsH = []
   let num = 0
   const sel = (i) => onSelect ? { style: { cursor: onCell ? 'crosshair' : 'pointer' }, onClick: (ev) => { onSelect(i); if (onCell) { const r = ev.currentTarget.getBoundingClientRect(); onCell(i, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height) } } } : {}
   const gb = (x, y, ww, hh) => D.georgian ? <g stroke="#94a3b8" strokeWidth="1.2">{[1, 2].map(j => <line key={'v' + j} x1={x + ww * j / 3} x2={x + ww * j / 3} y1={y} y2={y + hh} />)}{[1, 2].map(j => <line key={'h' + j} y1={y + hh * j / 3} y2={y + hh * j / 3} x1={x} x2={x + ww} />)}</g> : null
@@ -104,6 +115,8 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       </g>)
       colsW.push(dwOk ? W * dwRaw[i] / dwSum : W / n)
     })
+    if (onGeom && dwOk) { const norm = dwRaw.map(v => v / dwSum); for (let i = 0; i < n - 1; i++) { const bx = rg.x + rg.w * norm.slice(0, i + 1).reduce((a, c) => a + c, 0); grips.push(grip('sg' + i, bx, iy, sh, true, sx => { const [nl, pp] = clampSplit(norm, i, (sx - rg.x) / rg.w), nl2 = Math.round(nl * 1000) / 1000; return d => ({ ...d, widths: norm.map((v, k) => k === i ? nl2 : k === i + 1 ? +(pp - nl2).toFixed(3) : +v.toFixed(3)) }) })) } }
+    if (onGeom && top) grips.push(grip('sgt', rg.x, rg.y + top, rg.w, false, (sx, sy) => d => ({ ...d, fixedTop: Math.round(Math.min(.6, Math.max(.1, (sy - rg.y) / rg.h)) * 100) / 100 })))
     if (strip) body.push(<rect key="tr" x={rg.x} y={iy + sh} width={rg.w} height={strip} fill="#e5e9ef" stroke={STROKE} strokeWidth=".8" />)
     if (top) dimsV.push([rg.y - frame, rg.y + top, Math.round(H * D.fixedTop), 'a'])
   } else {
@@ -141,10 +154,12 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
           if (dims) g.push(tag(x + ww / 2, y + 4, 'F' + cur, 'lab'), circ(x + ww / 2, y + hh / 2, nn, 'n'), gsz('C' + cur, x + ww / 2, y + hh / 2 + 18))
         }
         body.push(<g key={ci + '-' + ri} {...sel(cur - 1)}>{g}{selected === cur - 1 && <rect x={x} y={y} width={ww} height={hh} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="4 2" />}</g>)
+        if (ri && onGeom) { const rn = c.rows.map(q => q.h / th), cc = ci; grips.push(grip('tg' + ci + '-' + ri, cx, cy, cw, false, (sx, sy) => { const [nt, pp] = clampSplit(rn, ri - 1, (sy - rg.y) / rg.h), n2 = Math.round(nt * 1000) / 1000; return d => ({ ...d, cols: d.cols.map((q, k) => k === cc ? { ...q, rows: q.rows.map((r2, j) => ({ ...r2, h: j === ri - 1 ? n2 : j === ri ? +(pp - n2).toFixed(3) : +rn[j].toFixed(3) })) } : q) }) })) }
         if (ri) body.push(<rect key={'tm' + ci + ri} x={cx} y={cy - frame * .3} width={cw} height={frame * .6} fill={fillP} stroke={STROKE} strokeWidth=".8" />)
         if (ci === 0 && c.rows.length > 1 && ri < c.rows.length - 1) dimsV.push([ri === 0 ? rg.y - frame : dimsV[dimsV.length - 1][1], cy + ch, Math.round(H * r.h / th * (1 - rk / h)), 'r' + ri])
         cy += ch
       })
+      if (ci && onGeom) { const cn = cols.map(q => q.w / tw), cc = ci; grips.push(grip('mg' + ci, cx, rg.y, rg.h, true, sx => { const [nl, pp] = clampSplit(cn, cc - 1, (sx - rg.x) / rg.w), n2 = Math.round(nl * 1000) / 1000; return d => ({ ...d, cols: d.cols.map((q, k) => ({ ...q, w: k === cc - 1 ? n2 : k === cc ? +(pp - n2).toFixed(3) : +cn[k].toFixed(3) })) }) })) }
       if (ci) body.push(<rect key={'mu' + ci} x={cx - frame * .3} y={rg.y} width={frame * .6} height={rg.h} fill={fillP} stroke={STROKE} strokeWidth=".8" />)
       cx += cw
     })
@@ -172,6 +187,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
         <marker id="dm" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,0 L0,6 L6,3 z" fill="#334155" /></marker></defs>
       {iso && <g opacity=".35"><polygon points={`${ox + w},${oy} ${ox + w + 22},${oy - 14} ${ox + w + 22},${oy + h - 14} ${ox + w},${oy + h}`} fill="#94a3b8" /><polygon points={`${ox},${oy} ${ox + 22},${oy - 14} ${ox + w + 22},${oy - 14} ${ox + w},${oy}`} fill="#b6c0cc" /></g>}
       {body}
+      {grips}
       {dimEls}
       {dims && <g transform={`translate(0,${oy + h + 56})`} fontSize="6.5" fontWeight="700" fill="#334155"><line x1={ox + 14} x2={ox + w - 14} y1="0" y2="0" stroke="#8fb9d6" strokeWidth="2" /><line x1={ox + 14} x2={ox + w - 14} y1="8" y2="8" stroke="#94a3b8" strokeWidth=".8" strokeDasharray="3 2" />
         {[ox, ox + w - 22].map(x => <g key={x} transform={`translate(${x},-7)`} fill="#fff" stroke={STROKE} strokeWidth=".8"><rect width="22" height="14" rx="1.5" /><rect x="3" y="3" width="7" height="8" fill="#e7eef5" /></g>)}
