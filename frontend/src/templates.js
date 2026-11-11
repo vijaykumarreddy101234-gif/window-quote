@@ -27,7 +27,7 @@ export const TEMPLATES = [
   t('c2', G.CW, 'Double open', 'casement', 1200, 1200, '60 series casement window', cs([C(R('LH')), C(R('RH'))])),
   t('c3', G.CW, 'Triple open', 'casement', 1800, 1200, '60 series casement window', cs([C(R('LH')), C(R('LH')), C(R('RH'))])),
   t('c4', G.CW, 'Four open', 'casement', 2400, 1200, '60 series casement window', cs([C(R('LH')), C(R('RH')), C(R('LH')), C(R('RH'))])),
-  t('tt', G.CW, 'Tilt & turn', 'casement', 900, 1200, '72 series tilt & turn window', cs(one('TT'))),
+  t('tt', G.CW, 'Tilt & turn', 'casement', 600, 1200, '60 series casement window', cs(one('TT'))),
   t('th', G.CW, 'Top-hung window', 'casement', 900, 600, '60 series casement window', cs(one('TOP'))),
   t('f2', G.CW, 'Fixed – 2 lite', 'fixed', 1200, 900, '60 series fixed window', cs([C(R('FIXED')), C(R('FIXED'))])),
   t('f3', G.CW, 'Fixed – top & bottom', 'fixed', 900, 1500, '60 series fixed window', cs([C([R('FIXED'), R('FIXED')])])),
