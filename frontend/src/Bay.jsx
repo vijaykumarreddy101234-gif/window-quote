@@ -6,7 +6,7 @@ const ST = '#3f4a5a'
 const tag = (x, y, t, w = 22, k) => <g key={k}><rect x={x - w / 2} y={y} width={w} height="11" fill="#fff" stroke="#334155" strokeWidth=".6" /><text x={x} y={y + 8} fontSize="7.5" fontWeight="700" textAnchor="middle" fill="#111">{t}</text></g>
 const circ = (x, y, n, k) => <g key={k}><circle cx={x} cy={y} r="8" fill="#fff" stroke="#334155" strokeWidth=".8" /><text x={x} y={y + 3.2} fontSize="9" textAnchor="middle">{n}</text></g>
 
-export function bayAngle(D) { return D.bayType === 'box' ? 70 : D.bayType === 'splay' ? 22.5 : 45 }
+export function bayAngle(D) { return D.bayInterior ? (180 - D.bayInterior) / 2 : D.bayType === 'box' ? 70 : D.bayType === 'splay' ? 22.5 : 45 }
 export function BayDrawing({ item, design: D, side = 'inside', selected, onSelect, mini = false }) {
   const W = item.width, H = item.height, cols = D.cols || [], n = cols.length, tw = cols.reduce((a, c) => a + c.w, 0) || 1
   const L = cols.map(c => W * c.w / tw), fill = PROF[D.colour?.Window] || '#fbfbfa'

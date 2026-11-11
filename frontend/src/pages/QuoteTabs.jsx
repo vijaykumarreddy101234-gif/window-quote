@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, inr, inr2, downloadFile } from '../api'
 import { WindowSvg } from '../WindowSvg'
+import WindLoad from './WindLoad'
 
 const LANGS = [['en', 'English'], ['hi', 'हिन्दी'], ['ta', 'தமிழ்'], ['te', 'తెలుగు'], ['bn', 'বাংলা'], ['mr', 'मराठी']]
 const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#475569']
@@ -118,11 +119,19 @@ export function InventoryTab({ id, q }) {
   </div>
 }
 
+function SectionsPreview({ title, data }) {
+  return <><h3>{title} <small>Preview — the download carries the letterhead, drawings and signature boxes.</small></h3>
+    <div className="qx-tiles6">{data.tiles.map(([k, v]) => <div key={k}><small>{k.toUpperCase()}</small><b>{v}</b></div>)}</div>
+    <p className="muted" style={{ color: '#9a3412' }}>{data.note}</p>
+    {data.sections.map(sc => <div key={sc.title} className="qx-sec"><h4>{sc.title}</h4>{sc.desc && <p className="muted">{sc.desc}</p>}
+      <div className="qx-scroll"><table className="qx-table"><thead><tr>{sc.cols.map((c, i) => <th key={i} style={{ textAlign: c.a === 'r' ? 'right' : c.a === 'c' ? 'center' : 'left' }}>{c.h}</th>)}</tr></thead>
+        <tbody>{sc.rows.map((r, ri) => <tr key={ri} className={r.t === 'strong' ? 'tot' : r.t === 'group' ? 'qx-grp' : ''}>{r.c.map((v, i) => <td key={i} style={{ textAlign: sc.cols[i] && sc.cols[i].a === 'r' ? 'right' : sc.cols[i] && sc.cols[i].a === 'c' ? 'center' : 'left', fontWeight: r.t === 'strong' || r.t === 'group' ? 700 : 400 }}>{v}</td>)}</tr>)}</tbody></table></div></div>)}</>
+}
 // ---------------------------------------------------------------- Documents
 export function DocumentsTab({ id, q, lang, setLang }) {
   const [view, setView] = useState('quotation'); const [cost, setCost] = useState(null); const [mat, setMat] = useState(null); const [trk, setTrk] = useState(null)
   const p = q.pricing, area = p.area || 0, win = p.subtotal - (p.discountAmt || 0) + p.transport + p.loading + p.unloading
-  useEffect(() => { if (view === 'costing' && !cost) api(`/quotations/${id}/costing`).then(setCost); if (view === 'materials' && !mat) api(`/quotations/${id}/materials`).then(setMat); if (view === 'tracking' && !trk) api(`/quotations/${id}/tracking`).then(setTrk) }, [view])
+  useEffect(() => { if (view === 'costing' && !cost) api(`/quotations/${id}/doc/costing?format=json`).then(setCost); if (view === 'materials' && !mat) api(`/quotations/${id}/doc/materials?format=json`).then(setMat); if (view === 'tracking' && !trk) api(`/quotations/${id}/tracking`).then(setTrk) }, [view])
   const dl = (kind, f) => downloadFile(`/quotations/${id}/doc/${kind}?format=${f}`, `${q.number}-${kind}.${f}`)
   const Card = ({ k, tag, title, children, noView }) => <div className={'qx-doc' + (view === k ? ' on' : '')}><span className="qx-tag">{tag}</span><h4>{title}</h4>{k === 'quotation' ? <div className="qx-showing">{view === k ? '✓ Showing below' : <button onClick={() => setView(k)}>View</button>}</div> : <button className="qx-view" onClick={() => setView(k)}>{view === k ? '⌄ Viewing' : '› View'}</button>}{children}</div>
   return <div className="qx-docs">
@@ -144,11 +153,11 @@ export function DocumentsTab({ id, q, lang, setLang }) {
         <p className="qx-note">Commercial saved quotation only. Not a production release.</p>
         <h4>Totals</h4><table className="qx-table"><thead><tr><th>Field</th><th>Amount</th></tr></thead><tbody>{[['Total windows', p.windows], ['Total area (sq ft)', area.toFixed(2)], ['Item subtotal', 'INR ' + fmt(p.subtotal + p.transport + p.loading + p.unloading)], ['Discount (' + (p.discount || 0) + '%)', '-INR ' + fmt(p.discountAmt || 0)], ['CGST', 'INR ' + fmt(p.cgst)], ['SGST', 'INR ' + fmt(p.sgst)], ['Round off', 'INR ' + fmt(p.roundOff)], ['Grand total', 'INR ' + fmt(p.total)], ['Price per sq ft (before GST)', 'INR ' + fmt(area ? win / area : 0)], ['Price per sq ft (after GST)', 'INR ' + fmt(area ? p.total / area : 0)]].map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}</tbody></table>
         <h4>Window sheets</h4><div className="qx-sheets">{p.items.map(it => <div key={it.id}><span className="qx-thumb"><WindowSvg item={it} mini /></span><b>{it.mark} {it.name}</b><small>{it.system} · {it.width} × {it.height} mm · Qty {it.qty}</small></div>)}</div></>}
-      {view === 'shopdrawing' && <><h3>Shop drawing</h3><div className="qx-elev">{p.items.map(it => <div key={it.id}><div className="qx-elev-d"><WindowSvg item={it} mini dims /></div><b>{it.mark} — {it.name}</b><small>{it.width} × {it.height} mm · Qty {it.qty}</small></div>)}</div></>}
-      {view === 'windload' && <><h3>Wind-load analysis</h3><p className="muted">This report is under development.</p></>}
+      {view === 'shopdrawing' && <><h3>Shop drawing <small>The same sheets as the PDF download. Click a window on the cover to open its sheet.</small></h3><div className="qx-elev">{p.items.map(it => <div key={it.id}><div className="qx-elev-d"><WindowSvg item={it} mini dims /></div><b>{it.mark} — {it.name}</b><small>{it.width} × {it.height} mm · Qty {it.qty}</small></div>)}</div></>}
+      {view === 'windload' && <WindLoad id={id} q={q} />}
       {view === 'elevation' && <><h3>Elevation Diagram Report</h3><div className="qx-elev">{p.items.map(it => <div key={it.id}><div className="qx-elev-d"><WindowSvg item={it} mini /></div><b>{it.mark} — {it.name}</b><small>{it.width} × {it.height} mm · Qty {it.qty}</small></div>)}</div></>}
-      {view === 'costing' && <><h3>Costing sheet <small>Owner only</small></h3>{!cost ? <p className="muted">Loading…</p> : <table className="qx-table"><tbody>{cost.costing.rows.map(r => <tr key={r.key} className={r.total ? 'tot' : ''}><td>{r.label}{r.rate != null ? ` (${r.rate}${r.unit === '%' ? '%' : ''})` : ''}</td><td>{inr2(r.value)}</td></tr>)}<tr className="grand"><td>Grand Total</td><td>{inr2(cost.costing.grand)}</td></tr></tbody></table>}</>}
-      {view === 'materials' && <><h3>Material requirement</h3>{!mat ? <p className="muted">Loading…</p> : <table className="qx-table"><thead><tr><th>Material</th><th>Unit</th><th>Required</th><th>Balance</th></tr></thead><tbody>{mat.groups.map(g => [<tr className="qx-grp" key={g.name}><td colSpan="4"><b>{g.name}</b></td></tr>, ...g.items.map((i, k) => <tr key={g.name + k}><td>{i.label}</td><td>{i.unit}</td><td>{i.required}</td><td>{i.balance}</td></tr>)])}</tbody></table>}</>}
+      {view === 'costing' && (!cost ? <p className="muted">Loading…</p> : <SectionsPreview title="Costing sheet" data={cost} />)}
+      {view === 'materials' && (!mat ? <p className="muted">Loading…</p> : <SectionsPreview title="Material requirement" data={mat} />)}
       {view === 'tracking' && (!trk ? <p className="muted">Loading…</p> : <TrackingView trk={trk} q={q} onPdf={() => dl('tracking', 'pdf')} />)}
     </div>
   </div>

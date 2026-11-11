@@ -326,4 +326,9 @@ function invoice(inv, co, inWords) {
   d.font('Helvetica').fontSize(8).fillColor('#555').text('This is a computer-generated invoice. Please confirm HSN/SAC and GST rate with your accountant.', L, 770, { width: Wd * .6 }); d.font('Helvetica-Bold').fontSize(9).fillColor('#111').text('For ' + (co.name || 'FenstraWorks'), 380, 750, { width: Rr - 380, align: 'right' }).font('Helvetica').fontSize(8).text('Authorised signatory', 380, 780, { width: Rr - 380, align: 'right' });
   d.end(); return done;
 }
-module.exports = { model, pdf: quotationPdf, quotationPdf, elevationPdf, reportDoc, xlsx, docx, table, invoice, dwg, quoteDate: fdate, addDays, collect, PDFDocument };
+function previewData(kind, c, D) {
+  const costing = kind === 'costing', S = costing ? costingSections(D) : materialSections(D), tr = D.tiles;
+  const tiles = [['Customer', c.customer.name || '—'], ['Project', c.project || '—'], ['Number', c.number], ['Windows', `${D.count} design${D.count === 1 ? '' : 's'} · ${D.units} unit${D.units === 1 ? '' : 's'}`], ...(costing ? [['Total area', `${f2(D.area)} sq ft`], ['Cost total', INRc(tr.cost)], ['Net selling', INRc(tr.net)], ['Contribution', INRc(tr.contribution)], ['Margin', `${tr.margin.toFixed(1)} %`], ['Wastage', `${INRc(tr.wastage)} · ${tr.wastePct.toFixed(1)} % of cost`]] : [['Profile bars', String(D.mat.profileBars)], ['GI bars', String(D.mat.giBars)], ['Glass area', `${f2(D.mat.glassArea)} sq ft`], ['Stock length', `${D.mat.stock} mm`]])];
+  return { tiles, note: "Pre-production estimate from the quotation's current designs; not a frozen work-order release.", sections: S.map(x => ({ title: x.title, desc: x.desc || '', cols: x.cols.map(k => ({ h: k.h, a: k.a || '' })), rows: x.rows.map(r => Array.isArray(r) ? { c: r, t: '' } : { c: r.c, t: r.t || '' }) })) };
+}
+module.exports = { previewData, model, pdf: quotationPdf, quotationPdf, elevationPdf, reportDoc, xlsx, docx, table, invoice, dwg, quoteDate: fdate, addDays, collect, PDFDocument };

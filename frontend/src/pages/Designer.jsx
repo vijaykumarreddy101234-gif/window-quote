@@ -8,6 +8,7 @@ import { profileImg } from '../profileImg'
 import { buildDxf, parseDxf } from '../dxf.mjs'
 import { saveBlob } from '../api'
 import { say } from '../dialog'
+import { defaults as instDefaults, qty as instQty, formula as instFormula } from '../installMap'
 import { DesignAssist } from '../DesignAssist'
 import { TEMPLATES, GALLERY, GROUPS, badge, WINDOW_COLORS, HW_FINISH, SHAPES } from '../templates'
 
@@ -33,10 +34,10 @@ export default function Designer() {
   const [d, setD] = useState(null); const [mode, setMode] = useState(new URLSearchParams(location.search).get('mode')||'2d'); const [side, setSide] = useState('inside'); const [src, setSrc] = useState('live')
   const [zoom, setZoom] = useState(1); const [pan, setPan] = useState([0, 0]); const [hand, setHand] = useState(false); const [view, setView] = useState('table')
   const [qs, setQs] = useState(''); const [dsn, setDsn] = useState(null); const [size, setSize] = useState([0, 0]); const [qty, setQty] = useState(1)
-  const [tool, setTool] = useState(null); const [sel, setSel] = useState(null); const [hist, setHist] = useState([]); const [fut, setFut] = useState([]); const [note, setNote] = useState(''); const [noteOpen, setNoteOpen] = useState(false)
+  const [bayEd, setBayEd] = useState(null); const [hwBrands, setHwBrands] = useState([]); const [tool, setTool] = useState(null); const [sel, setSel] = useState(null); const [hist, setHist] = useState([]); const [fut, setFut] = useState([]); const [note, setNote] = useState(''); const [noteOpen, setNoteOpen] = useState(false)
   const [profs, setProfs] = useState({}); const [live, setLive] = useState(null); const [glasses, setGlasses] = useState([]); const [glassName, setGlassName] = useState(''); const [msg, setMsg] = useState(''); const [adv, setAdv] = useState(false); const [shape, setShape] = useState('rect'); const [custom, setCustom] = useState({ name: '', color: '#888888' }); const [help, setHelp] = useState(false); const [dv, setDv] = useState(null)
   const load = () => api(`/quotations/${id}/items/${itemId}/engine`).then(r => { setD(r); setDsn(getDesign(r.item)); setSize([r.item.width, r.item.height]); setQty(r.item.qty); setGlassName(r.item.glass) })
-  useEffect(() => { load(); api(`/quotations/${id}`).then(q => setQs(q.status)); api('/glass').then(g => setGlasses(Array.isArray(g) ? g : [])).catch(() => {}); api('/profiles').then(p => setProfs(Object.fromEntries((Array.isArray(p) ? p : []).map(x => [x.code, x.description])))).catch(() => {}) }, [id, itemId])
+  useEffect(() => { load(); api(`/quotations/${id}`).then(q => setQs(q.status)); api('/glass').then(g => setGlasses(Array.isArray(g) ? g : [])).catch(() => {}); api('/inventory/hardware').then(h => setHwBrands([...new Set((Array.isArray(h) ? h : (h.rows || [])).map(x => x.brand).filter(Boolean))])).catch(() => {}); api('/profiles').then(p => setProfs(Object.fromEntries((Array.isArray(p) ? p : []).map(x => [x.code, x.description])))).catch(() => {}) }, [id, itemId])
   useEffect(() => {
     if (!d || !dsn || qs !== 'draft') return
     const h = setTimeout(() => { api(`/quotations/${id}/items/${itemId}/preview`, { method: 'POST', body: { design: dsn, width: size[0], height: size[1], glass: glassName, qty } }).then(r => setLive(r.engine)).catch(() => {}) }, 250)
@@ -92,6 +93,7 @@ export default function Designer() {
   const engErr = e && e.error
   const panes = dsn.kind === 'sliding' ? Array.from({ length: dsn.panels || 2 }, (_, i) => `S${i + 1}`) : cells.map((c, i) => `C${i + 1}`)
   const door = !!dsn.door
+  const allFixed = dsn.kind === 'grid' && cells.length > 0 && cells.every(c => c.op === 'FIXED')
   const sub = e ? `${e.area} sq ft window · ${e.kg} kg profile${e.kg ? ` (${Math.round(e.area * 0.092903 / e.kg * 1000)} m²/t)` : ''} · ${e.glassArea} sq ft glass · Qty ${qty}` : `${it.area} sq ft window · Qty ${qty}`
   const dirty = hist.length > 0 || size[0] !== it0.width || size[1] !== it0.height || glassName !== it0.glass
   const price = e && e.error ? null : !hist.length && size[0] === it0.width && size[1] === it0.height && it0.each ? it0.each : (e ? e.unit : it.each)
@@ -162,6 +164,23 @@ export default function Designer() {
         </Sheet>}
         {tool === 'shapes' && <Sheet title="SHAPES & BAYS" onClose={close}>
           <p className="muted" style={{ marginTop: 0 }}>Choose a shape, adjust its preview, then apply. Dimensions use your selected units.</p>
+          {dsn.bay && dsn.kind === 'grid' && dsn.cols.length === 2 && (() => {
+            const W0 = size[0], wts = dsn.cols.map(c => c.w), tot0 = wts[0] + wts[1], A0 = Math.round(W0 * wts[0] / tot0), B0 = W0 - A0, ang0 = dsn.bayInterior || (dsn.bayType === 'splay' ? 135 : dsn.bayType === 'box' ? 110 : 90)
+            const E = bayEd || { a: A0, b: B0, ang: ang0, link: false }, setE = o => setBayEd({ ...E, ...o }), a = +E.a || 0, b = +E.b || 0, ang = Math.min(175, Math.max(30, +E.ang || 90)), rad = ang * Math.PI / 180
+            const span = Math.sqrt(a * a + b * b - 2 * a * b * Math.cos(rad)), depth = span ? a * b * Math.sin(rad) / span : 0
+            const tx = (t) => 110 + t * 0, pa = [110 - Math.sin(rad / 2) * 70, 90 - Math.cos(rad / 2) * 0 + 0]
+            const h = 80, ax = 110 - (a / (a + b)) * 80 * Math.sin(rad / 2) * 1.2, bx = 110 + (b / (a + b)) * 80 * Math.sin(rad / 2) * 1.2, ay = 30 + (1 - Math.cos(rad / 2)) * 40, by = ay
+            return <div className="bayed"><div className="sec">Change shape or bay</div>
+              <div className="lab" style={{ marginTop: 8 }}>TOP VIEW · OUT ↑</div>
+              <svg width="220" height="110" viewBox="0 0 220 110" style={{ display: 'block', margin: '4px auto' }}><path d={`M${ax},${ay + 40} L110,${20} L${bx},${by + 40}`} fill="none" stroke="#2563eb" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><text x="52" y="70" fontSize="11" fill="#111827">A · {a}</text><text x="140" y="70" fontSize="11" fill="#111827">B · {b}</text><text x="100" y="104" fontSize="11" fill="#6b7280">{Math.round(ang)}°</text></svg>
+              <label className="chk" style={{ display: 'flex', gap: 8, margin: '6px 0', textTransform: 'none', letterSpacing: 0 }}><input type="checkbox" checked={!!E.link} onChange={ev => setE({ link: ev.target.checked, b: ev.target.checked ? a : E.b })} /> Link side widths and angles</label>
+              <div className="lab">FACE A WIDTH (mm)</div><input className="note" type="number" disabled={!edit} value={E.a} onChange={ev => setE({ a: ev.target.value, ...(E.link ? { b: ev.target.value } : {}) })} />
+              <div className="lab">FACE B WIDTH (mm)</div><input className="note" type="number" disabled={!edit || E.link} value={E.b} onChange={ev => setE({ b: ev.target.value })} />
+              <div className="lab">JOINT 1 ANGLE (°)</div><input className="note" type="number" min="30" max="175" disabled={!edit} value={E.ang} onChange={ev => setE({ ang: ev.target.value })} />
+              <p className="muted" style={{ fontSize: 12.5 }}>Interior angles: 135° makes a 45° turn. 90° uses the system's 90° bay pole; another angle uses a pole made for it, else the round pole with adapters.</p>
+              <p className="muted" style={{ fontSize: 12.5 }}>Face lengths include the outside corner; the pole and adapters are deducted from each face before calculating frame cuts.</p>
+              <div className="kv"><span>Total face lengths</span><b>{a + b} mm</b></div><div className="kv"><span>Plan span</span><b>{span.toFixed(1)} mm</b></div><div className="kv"><span>Projection depth</span><b>{depth.toFixed(1)} mm</b></div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}><button className="btn" disabled={!edit || a < 300 || b < 300} onClick={() => { setSize([Math.round(a + b), size[1]]); push({ ...dsn, cols: [{ ...dsn.cols[0], w: a }, { ...dsn.cols[1], w: b }], bayInterior: Math.round(ang), bayType: Math.round(ang) === 90 ? 'corner' : ang >= 120 ? 'splay' : 'box' }); setBayEd(null); close() }}>Apply bay changes</button><button className="btn ghost" onClick={() => { setBayEd(null); close() }}>Cancel</button></div></div> })()}
           <div className="sec">Choose shape or bay</div>
           <div className="cards">{SHAPES.map(([v, l]) => <button key={v} className={'dcard sq' + (shape === v ? ' on' : '')} onClick={() => setShape(v)}><ShapeIcon v={v} on={shape === v} /><b>{l}</b></button>)}</div>
           <p className="muted" style={{ fontSize: 12.5 }}>Fixed arch heads: profile and bead arc length + 30% bending wastage; GI at net arc length. Straight sections and mullions use normal joint allowances. Apply uses the quotation system’s 60 mm casement outer; select Engine pricing for quantities. Multi-faced frames remain manual quotes. Bays retain separate framed units.</p>
@@ -209,11 +228,13 @@ export default function Designer() {
           {(!e || (e.cuts && !e.cuts.length && !engErr)) && <div className="muted">Cut list appears once the design is saved.</div>}
         </Sheet>}
         {tool === 'hardware' && <Sheet title="HARDWARE" onClose={close}>
-          <div className="lab">HANDLE HEIGHT</div><input className="note" disabled={!edit} placeholder="mm from floor" value={dsn.handleHeight || ''} onChange={ev => push({ ...dsn, handleHeight: ev.target.value })} />
+
+          {allFixed && <div className="muted" style={{ fontSize: 12.5, margin: '8px 0' }}>No opening sashes: fixed panes take no sash hardware.</div>}
+          {!allFixed && <><div className="lab">HANDLE HEIGHT</div><input className="note" disabled={!edit} placeholder="mm from floor" value={dsn.handleHeight || ''} onChange={ev => push({ ...dsn, handleHeight: ev.target.value })} />
           <div className="muted" style={{ fontSize: 12.5, margin: '4px 0 10px' }}>Blank = centre of the sash. A typed height is from the floor.</div>
-          <div className="paneChips">{panes.map((p, i) => <button key={p} className={'opt inl' + ((sel ?? 0) === i ? ' on' : '')} onClick={() => setSel(i)}>PANE {i + 1} · {p}</button>)}</div><div className="sec">HARDWARE</div>
-          <Radios label="HARDWARE BRAND" opts={['Quotation brand (Generic Hardware)', 'Generic hardware']} val={(dsn.hw || {}).brand} on={v => hw('brand', 'v', v)} />
-          {dsn.kind === 'sliding' ? <>
+          <div className="paneChips">{panes.map((p, i) => <button key={p} className={'opt inl' + ((sel ?? 0) === i ? ' on' : '')} onClick={() => setSel(i)}>PANE {i + 1} · {p}</button>)}</div><div className="sec">HARDWARE</div></>}
+          <div className="hwgrp"><div className="lab">HARDWARE BRAND</div><select className="sel" aria-label="Hardware brand" disabled={!edit} value={(dsn.hw || {}).brand?.v || 'Quotation brand (Generic Hardware)'} onChange={ev => hw('brand', 'v', ev.target.value)}>{['Quotation brand (Generic Hardware)', 'Generic hardware', ...hwBrands.filter(b => b !== 'Generic hardware')].map(b => <option key={b}>{b}</option>)}</select></div>
+          {allFixed ? null : dsn.kind === 'sliding' ? <>
             <div className="muted" style={{ fontSize: 12.5 }}>Sliding · {dsn.panels || 2} sashes ({panes.join(', ')})</div>
             {(dsn.panels || 2) === 3 && <div className="muted" style={{ fontSize: 12.5, margin: '4px 0' }}>S2: Middle sash — held by the interlocks; no lock or handle of its own.</div>}
             <Radios label="APPLY TO" opts={[`All ${dsn.panels || 2} sliding sashes`, ...panes.map(p => p + ' only')]} val={(dsn.hw || {}).applyTo?.v} on={v => hw('applyTo', 'v', v)} />
@@ -241,11 +262,11 @@ export default function Designer() {
             <Radios label="CYLINDER" opts={['None', 'CYLINDER']} val={(dsn.hw || {}).cylinder?.v} on={v => hw('cylinder', 'v', v)} />
             <Radios label="STRIKER" opts={['Auto — CMT ESPAG STRIKER', 'None']} val={(dsn.hw || {}).striker?.v} on={v => hw('striker', 'v', v)} /></>}
           <div className="sec">Gaskets</div>
-          <Radios label="AUTOMATIC GASKET" opts={['No gasket', 'CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK']} val={(dsn.hw || {}).gasket?.v} on={v => hw('gasket', 'v', v)} />
+          <div className="hwgrp"><div className="lab">AUTOMATIC GASKET</div><select className="sel" aria-label="Automatic gasket" disabled={!edit} value={(dsn.hw || {}).gasket?.v || 'No gasket'} onChange={ev => hw('gasket', 'v', ev.target.value)}>{['No gasket', 'CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK'].map(o => <option key={o}>{o}</option>)}</select></div>
           {!!dsn.mesh && <Radios label="MESH GASKET" opts={['Auto — O TYPE GASKET · ASH BLACK', ...['CASEMENT MULLION GASKET · BLACK', 'GLAZING GASKET INNER · ASH BLACK', 'GLAZING GASKET OUTER · ASH BLACK', 'K TYPE GASKET · ASH BLACK', 'O TYPE GASKET · ASH BLACK', 'SHUTTER BEATING GASKET · ASH BLACK', 'STAR TYPE GASKET · ASH BLACK'].filter(g => !g.startsWith('O TYPE'))]} val={(dsn.hw || {}).meshGasket?.v} on={v => hw('meshGasket', 'v', v)} />}
           <div className="muted" style={{ fontSize: 12.5, margin: '6px 0' }}>These profiles come with their gasket fitted, so none is added.</div>
           {e && (e.gaskets || []).map(g => <div key={g.code + g.name} className="muted" style={{ fontSize: 13 }}>{g.name} · Mesh net · {g.m} m · {inr2(g.m * g.rate)}</div>)}
-          <div className="muted">Installation material · {door ? 'Casement door' : dsn.kind === 'sliding' ? 'Sliding window' : 'Casement window'}</div>
+          <InstallList dsn={dsn} size={size} door={door} cells={cells} />
           {e && e.hardware.length > 0 && <table style={{ marginTop: 10 }}><thead><tr><th>Item</th><th>Qty</th><th>Rate</th></tr></thead><tbody>{e.hardware.map(h => <tr key={h.name}><td>{h.name}</td><td>{h.qty}</td><td>{inr2(h.rate)}</td></tr>)}</tbody></table>}
         </Sheet>}
         {tool === 'glazing' && <Sheet title="GLAZING" onClose={close}>
@@ -255,8 +276,8 @@ export default function Designer() {
           {(() => { const per = dsn.perPane ?? Object.values(dsn.paneGlass || {}).some(Boolean); return <>
             <label className="chk" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '10px 0' }}><input type="checkbox" disabled={!edit} checked={!!per} onChange={ev => push({ ...dsn, perPane: ev.target.checked, ...(ev.target.checked ? {} : { paneGlass: {} }) })} /> Different glass for each sash</label>
             {panes.map((p, i) => <div key={p} className="hwgrp"><div className="lab">PANE {i + 1} · {p}</div>
-              {per && <select className="sel" disabled={!edit} value={(dsn.paneGlass || {})[i] || ''} onChange={ev => push({ ...dsn, perPane: true, paneGlass: { ...(dsn.paneGlass || {}), [i]: ev.target.value } })}>
-                <option value="">Inherit window glass ({(glassName.match(/\d+/) || ['5'])[0]} mm)</option>{glasses.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}</select>}
+              <select className="sel" aria-label={`Glass for pane ${i + 1}`} disabled={!edit} value={(dsn.paneGlass || {})[i] || ''} onChange={ev => push({ ...dsn, perPane: true, paneGlass: { ...(dsn.paneGlass || {}), [i]: ev.target.value } })}>
+                <option value="">Inherit window glass ({(glassName.match(/\d+/) || ['5'])[0]} mm)</option>{glasses.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}</select>
               <label className="chk" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}><input type="checkbox" disabled={!edit} checked={!!(dsn.paneFan || {})[i]} onChange={ev => push({ ...dsn, paneFan: { ...(dsn.paneFan || {}), [i]: ev.target.checked } })} /> <span className="lab" style={{ margin: 0 }}>EXHAUST FAN CUT-OUT</span></label></div>)}</> })()}
           {e && e.panes && <table style={{ marginTop: 10 }}><thead><tr><th>Pane</th><th>Glass size</th><th>Area</th></tr></thead><tbody>{e.panes.map(p => <tr key={p.name}><td>{p.name}</td><td>{p.mesh ? 'Mesh' : `${Math.round(p.w)} × ${Math.round(p.h)} mm`}</td><td>{p.mesh ? '—' : ((p.w * p.h) / 92903.04).toFixed(2) + ' sq ft'}</td></tr>)}</tbody></table>}
         </Sheet>}
@@ -287,9 +308,30 @@ export default function Designer() {
     </div>)
 }
 
+function InstallList({ dsn, size, door, cells }) {
+  const [map, setMap] = useState(null); useEffect(() => { api('/settings/install_map').then(r => setMap(r && r.types ? r.types : instDefaults())).catch(() => setMap(instDefaults())) }, [])
+  const type = dsn.kind === 'sliding' ? (door ? 'Sliding door' : 'Sliding window') : door ? 'Casement door' : (cells.length && cells.every(c => c.op === 'FIXED') ? 'Fixed window' : 'Casement window')
+  const ft = 304.8, w = size[0] / ft, h = size[1] / ft, area = w * h, perim = 2 * (w + h), panes = dsn.kind === 'sliding' ? (dsn.panels || 2) : 1
+  const items = (map && map[type]) || [], c = { frame: 1, comp: 1, area, perim, sash: panes, mesh: dsn.mesh ? 1 : 0, coupler: 0 }
+  return <details className="instl"><summary>Installation material · {type}</summary>
+    <div className="muted" style={{ fontSize: 12.5, margin: '6px 0' }}>{w.toFixed(2)} × {h.toFixed(2)} ft · {area.toFixed(2)} sq ft · perimeter {perim.toFixed(2)} ft</div>
+    {items.length === 0 ? <div className="muted">Loading…</div> : <table><thead><tr><th>Item</th><th>Qty</th><th>Calculation</th></tr></thead><tbody>{items.map(it => <tr key={it.id || it.name}><td>{it.name}<br /><small className="muted">{it.group}</small></td><td>{instQty(it, c)} {it.unit}</td><td style={{ fontSize: 11.5 }} className="muted">{instFormula(it)}</td></tr>)}</tbody></table>}
+    <div className="muted" style={{ fontSize: 12 }}>Recipes come from Settings → Installation mapping.</div></details>
+}
 const fmtLens = lens => Object.entries(lens.reduce((m, x) => { m[Math.round(x)] = (m[Math.round(x)] || 0) + 1; return m }, {})).map(([l, n]) => `${n} × ${l} mm`).join(' · ')
 function InspectCards({ e, dsn, push, edit, profs, sel }) {
   const [open, setOpen] = useState('Frame')
+  const frames = e.cuts.filter(c => c.role === 'Frame')
+  if (dsn.bay && frames.length > 1) {
+    const bead = e.cuts.find(c => c.role === 'Bead'), cp = e.cuts.filter(c => c.role === 'Coupler'), per = bead ? Math.floor(bead.lens.length / frames.length) : 0
+    const rows = []
+    frames.forEach((f, i) => { rows.push(['F' + (i + 1), 'Frame', f]); if (bead) rows.push(['F' + (i + 1), 'Bead', { ...bead, lens: bead.lens.slice(i * per, (i + 1) * per) }]) })
+    cp.forEach(c => rows.push(['', 'Coupler', c]))
+    return <div className="ins-cards">{rows.map(([f, r, c], i) => { const k = f + r + i, isOpen = open === k
+      return <div key={k} className={'ins-card' + (isOpen ? ' open' : '')}><button className="ins-card-h" onClick={() => setOpen(isOpen ? null : k)}><span className="r">{f && <em style={{ fontStyle: 'normal', color: '#2563eb', marginRight: 8 }}>{f}</em>}{r}</span><b>{c.name}</b><span className="s">{c.code} · {fmtLens(c.lens)}</span></button>
+        {isOpen && <div className="ins-card-b"><img className="prof-img" alt={c.code} src={profileImg(c.code)} onError={ev => { ev.currentTarget.style.display = 'none' }} />
+          <div className="kv"><span>Cut length</span><b>{Math.round(c.lens[0])} mm</b></div><div className="kv"><span>End cuts</span><b>{r === 'Coupler' ? '90° / 90°' : '45° / 45°'}</b></div><div className="kv"><span>Finish</span><b>{(dsn.colour && dsn.colour.Window) || 'White'}</b></div></div>}</div> })}</div>
+  }
   const roles = []
   e.cuts.forEach(c => { if (!roles.includes(c.role)) roles.push(c.role) })
   ;(e.options || []).forEach(o => { if (!roles.includes(o.role)) roles.push(o.role) })

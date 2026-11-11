@@ -514,6 +514,7 @@ api.get('/quotations/:id/doc/:kind', async (req, res) => {
       return send(res, Buffer.from([...(head || []), ...body, ...(tail || [])].join('\n')), 'application/dxf', `${q.number}-shop-drawing.dxf`); }
     if (kind === 'shopdrawing') kind = 'elevation';
     if (kind === 'tracking') return send(res, await docs.reportDoc('tracking', 'pdf', c, trackData(q)), MIME.pdf, `${q.number}-tracking.pdf`);
+    if ((kind === 'costing' || kind === 'materials') && req.query.format === 'json') return res.json(docs.previewData(kind, c, D));
     if (kind === 'costing' || kind === 'materials') return send(res, await docs.reportDoc(kind, fmt, c, D), MIME[fmt], `${q.number}-${kind}.${fmt}`);
     res.status(404).json({ error: 'Unknown document' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -521,6 +522,7 @@ api.get('/quotations/:id/doc/:kind', async (req, res) => {
 
 
 require('./crm')(api, db, { uid, now, quoteTotals });
+require('./windload')(api, db, { quoteEntries, docs, uid, now });
 
 // production — work orders, sub work orders, shop-floor entries
 db.exec(`CREATE TABLE IF NOT EXISTS sub_work_orders (id TEXT PRIMARY KEY, wo_id TEXT, number TEXT, notes TEXT DEFAULT '', status TEXT DEFAULT 'draft', created_at TEXT);
