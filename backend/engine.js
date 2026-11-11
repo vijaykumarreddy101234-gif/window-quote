@@ -63,18 +63,19 @@ function compute(d, ctx) {
     else {
       // unequal sash sizes: d.widths = visible leaf widths (sum = W); equal otherwise
       const dw = Array.isArray(d.widths) && d.widths.length === n && Math.abs(d.widths.reduce((a, b) => a + (+b || 0), 0) - W) < 2 ? d.widths.map(Number) : Array(n).fill(pw);
-      const adj = n === 2 ? (mesh ? [-1, -1] : [-6, -6]) : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
+      const adj = (d.tracks === 3 && n === 3 && !mesh) ? [21, 21, 21] : n === 2 ? (mesh ? [-1, -1] : [-6, -6]) : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
       widths = dw.map((x, i) => x + adj[i]);
       meshN = mesh; meshW = dw[n - 1] - 1;
     }
     const sashLens = [], beadLens = [], leafInfo = [];
     widths.forEach((sw, i) => {
       sw = Math.round(sw); sashLens.push(sw, sw, sashH, sashH);
-      const gw = sw - bd, gh = sashH - bd; beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: (ctr && i === 1) ? 'F1' : (ctr && i === 2 ? 'S2' : 'S' + (i + 1)), w: gw, h: gh }); glassPanes[glassPanes.length - 1].sl = sw * 2 + sashH * 2; glassPanes[glassPanes.length - 1].gi = Math.max(0, sashH - 100) * 2;
+      const gd = beadCode === 'RSB-17.5EB' ? 2 : 0; // 95 series glass sits 2 mm inside the 17.5 bead, as demo
+      const gw = sw - bd - gd, gh = sashH - bd - gd; beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: (ctr && i === 1) ? 'F1' : (ctr && i === 2 ? 'S2' : 'S' + (i + 1)), w: gw, h: gh }); glassPanes[glassPanes.length - 1].sl = sw * 2 + sashH * 2; glassPanes[glassPanes.length - 1].gi = Math.max(0, sashH - 100) * 2;
     });
     add('Sash', sashCode, sashLens, { grouped: true });
     add('Bead', beadCode, beadLens, { grouped: true });
-    add('Interlock', S.il, Array(ctr || (mesh === 1 && n > 2) ? n + 1 : n).fill(sashH - 6));
+    add('Interlock', S.il, Array(d.tracks === 3 && n === 3 && !mesh && !ctr ? 4 : ctr || (mesh === 1 && n > 2) ? n + 1 : n).fill(sashH - 6));
     if (n >= 4) add('Coupler', 'RSA-22SA', [sashH - 6]);
     if (meshN) add('Mesh Sash', meshCode, [...Array(meshN * 2).fill(Math.round(meshW)), ...Array(meshN * 2).fill(sashH)], { grouped: true });
     if (meshN) add('Bead', beadCode, [...Array(meshN * 2).fill(Math.round(meshW - 89 - 8)), ...Array(meshN * 2).fill(Math.round(sashH - 84 - 8))], { grouped: true });

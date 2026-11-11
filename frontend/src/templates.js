@@ -11,7 +11,7 @@ export const CATS = ['All', 'Sliding', 'Casement', 'Fixed', 'Doors', 'Ventilator
 export const TEMPLATES = [
   t('s2', G.SW, '2-panel sliding', 'sliding', 1200, 1200, '62 series sliding window', sl(2, 0, { series: '62' })),
   t('s3', G.SW, '3-panel sliding', 'sliding', 1800, 1200, '62 series sliding window', sl(3, 0, { centre: true, series: '62' })),
-  t('s3t', G.SW, '3-track 3-panel sliding', 'sliding', 1800, 1200, '112 series sliding window', sl(3, 0, {  tracks: 3 , series: '112' })),
+  t('s3t', G.SW, '3-track 3-panel sliding', 'sliding', 1800, 1200, '95 series sliding window', sl(3, 0, { tracks: 3, series: '95' })),
   t('s4', G.SW, '4-panel sliding', 'sliding', 2800, 1200, '62 series sliding window', sl(4, 0, { series: '62' })),
   t('s2m', G.SW, '2-panel sliding with mesh', 'sliding', 1200, 1200, '80 series sliding window', sl(2, 1, { series: '80' }), { mesh: 'Mesh' }),
   t('s3m', G.SW, '3-panel sliding with mesh', 'sliding', 1800, 1200, '92 series sliding window', sl(3, 1, { series: '92' }), { mesh: 'Mesh' }),
