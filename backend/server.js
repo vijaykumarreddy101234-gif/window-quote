@@ -504,7 +504,7 @@ api.get('/quotations/:id/doc/:kind', async (req, res) => {
   const fmt = ['xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf'; let kind = req.params.kind; const cust0 = 0, cust = db.prepare('SELECT * FROM customers WHERE id=?').get(q.customer_id) || {};
   try {
     const c = docCtx(q, cust), ents = quoteEntries(q.id), tot = quoteTotals(q.id), D = qcalc.report(ents, prcQ(q.id), getComm(q.id), tot, { hw: hwMeta, glass: glassMeta });
-    if (kind === 'elevation') { const items = ents.map(({ it }) => ({ mark: it.mark, name: it.name, w: it.width, h: it.height, qty: it.qty, glass: it.glass, hasMesh: it.mesh && it.mesh !== 'No mesh', finish: it.finish, location: it.location, d: it.d }));
+    if (kind === 'elevation' || (kind === 'shopdrawing' && req.query.format !== 'dxf')) { const items = ents.map(({ it }) => ({ mark: it.mark, name: it.name, w: it.width, h: it.height, qty: it.qty, glass: it.glass, hasMesh: it.mesh && it.mesh !== 'No mesh', finish: it.finish, location: it.location, d: it.d }));
       return send(res, await docs.elevationPdf(c, items, D.notes), MIME.pdf, q.number + '-elevation.pdf'); }
     if (kind === 'shopdrawing' && req.query.format === 'dxf') { const { buildDxf } = await import('./dxf.mjs'); let oy = 0, head = null, tail = null, body = [];
       for (const { it } of ents) { const d = it.d && it.d.kind ? it.d : { kind: 'sliding', panels: 2 };
