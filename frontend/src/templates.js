@@ -42,7 +42,7 @@ export const TEMPLATES = [
   t('v3', G.V, 'Exhaust fan', 'combination', 300, 300, '60 series ventilator', cs(one('FAN'))),
   t('v4', G.V, 'Fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C([R('FIXED', .5), R('TOP', .5)])])),
   t('v5', G.V, 'Fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C([R('FIXED', .5), R('LOUVRE', .5)])])),
-  t('v6', G.V, 'Fan left · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), .4), C(R('FIXED'), .6)], { band: { at: 'bottom', h: .4, op: 'TOP' } })),
+  t('v6', G.V, 'Fan left · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), 1), C(R('FIXED'), 2)], { band: { at: 'bottom', h: .5, op: 'TOP' } })),
   t('v7', G.V, 'Fan right · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), .6), C(R('FAN'), .4)], { band: { at: 'bottom', h: .4, op: 'TOP' } })),
   t('v8', G.V, 'Fan left · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), .4), C(R('FIXED'), .6)], { band: { at: 'bottom', h: .4, op: 'LOUVRE' } })),
   t('v9', G.V, 'Fan right · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), .6), C(R('FAN'), .4)], { band: { at: 'bottom', h: .4, op: 'LOUVRE' } })),

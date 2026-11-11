@@ -120,16 +120,20 @@ function compute(d, ctx) {
     // stacked rows (single column): with a top-hung sash the transom is a Z-mullion RSC-74ZM at W-36 and the verticals split (demo Fixed top-hung); fixed/louvre stacks use RSC-74TM at W-40 with an unsplit frame (demo Fixed louvre)
     const stackRows = !door && cols.length === 1 && cols[0].rows.length > 1;
     const stackTop = stackRows && cols[0].rows.some(r => r.op === 'TOP');
-    add('Frame', frameCode, stackTop ? [W + 2 * w, W + 2 * w, ...cols[0].rows.flatMap(r => [H * r.h + 2 * w, H * r.h + 2 * w])] : [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
+    // band with a top-hung sash (demo Fan left · fixed · top-hung 900x600): Z-mullion at W-36, verticals split at the band, rows +21 mm
+    const bandTop = !!(d.band && d.band.op === 'TOP'), bandHm = d.band ? H * (1 - d.band.h) : H, bandHb = d.band ? H * d.band.h : 0;
+    add('Frame', frameCode, bandTop ? [W + 2 * w, W + 2 * w, bandHm + 2 * w, bandHm + 2 * w, bandHb + 2 * w, bandHb + 2 * w] : stackTop ? [W + 2 * w, W + 2 * w, ...cols[0].rows.flatMap(r => [H * r.h + 2 * w, H * r.h + 2 * w])] : [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
     let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0, zTm = 0;
     const band = d.band && d.band.op ? d.band : null, Hmain = band ? H * (1 - band.h) : H
     const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
+      // bead/pane width of a fixed, louvre or fan cell: column width less 40 at each outer frame edge and 17 at a mullion (demo 300 + 600 columns: 243 and 543)
+      const colEdge = W * c.w / totalW - (ci === 0 ? 40 : 17) - (ci === cols.length - 1 ? 40 : 17);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : H - FRAME_FACE + (band ? 0 : 0)); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
+      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : bandTop ? H - 59 : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
-        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0);
+        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0) + (bandTop ? 21 : 0);
         if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += cw - 2 * FRAME_FACE; }
         idx++;
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
@@ -155,17 +159,17 @@ function compute(d, ctx) {
           const gw = cw - 2 * FRAME_FACE + 20, gh = ch - 2 * FRAME_FACE + 20;
           if (r.op === 'FIXED') {
             // side light beside a door: column less 41 (frame) / 36 (mullion), height H-104; window fixed: column less 40 each side
-            const fw = sidelightDoor ? W * c.w / totalW - (ci === 0 ? 41 : 36) - (ci === cols.length - 1 ? 41 : 36) : cw - 2 * FRAME_FACE;
+            const fw = sidelightDoor ? W * c.w / totalW - (ci === 0 ? 41 : 36) - (ci === cols.length - 1 ? 41 : 36) : colEdge;
             const fh = sidelightDoor ? H - 104 : ch - 2 * FRAME_FACE;
             beadLens.push(fw, fw, fh, fh); glassPanes.push({ name: 'C' + idx, w: fw, h: fh });
           }
-          else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); glassPanes.push({ name: 'L' + idx, w: cw - 2 * FRAME_FACE, h: ch - 2 * FRAME_FACE }); }
-          else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); const fw = cw - 2 * FRAME_FACE, fh = ch - 2 * FRAME_FACE; beadLens.push(fw, fw, fh, fh); } // fan cell: bead only, no glass, as demo (Exhaust fan 300: bead 4 x 220)
+          else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); glassPanes.push({ name: 'L' + idx, w: colEdge, h: ch - 2 * FRAME_FACE }); }
+          else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); const fw = colEdge, fh = ch - 2 * FRAME_FACE; beadLens.push(fw, fw, fh, fh); } // fan cell: bead only, no glass, as demo (Exhaust fan 300: bead 4 x 220)
         }
       });
     })
     doCols(cols, Hmain, totalW)
-    if (band) { tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
+    if (band) { if (bandTop) zTm += W - 36; else tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', door ? (sidelightDoor ? 'RSC-74ZM' : 'RSC-60FM') : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
