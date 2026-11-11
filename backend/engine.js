@@ -68,7 +68,7 @@ function compute(d, ctx) {
     else {
       // unequal sash sizes: d.widths = visible leaf widths (sum = W); equal otherwise
       const dw = Array.isArray(d.widths) && d.widths.length === n && Math.abs(d.widths.reduce((a, b) => a + (+b || 0), 0) - W) < 2 ? d.widths.map(Number) : Array(n).fill(pw);
-      const adj = (d.tracks === 3 && n === 3 && !mesh) ? [21, 21, 21] : n === 2 ? (mesh ? [-1, -1] : [-6, -6]) : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
+      const adj = (d.tracks === 3 && n === 3 && !mesh) ? [21, 21, 21] : n === 2 ? (mesh ? [-1, -1] : isDoor ? [6, 6] : [-6, -6]) : n === 3 ? [-6, 35, -6] : Array.from({ length: n }, (_, i) => (i === 0 || i === n - 1) ? -6 : 35);
       widths = dw.map((x, i) => x + adj[i]);
       meshN = mesh; meshW = dw[n - 1] - 1;
     }
