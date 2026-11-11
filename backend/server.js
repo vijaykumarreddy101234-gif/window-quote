@@ -607,33 +607,40 @@ api.get('/production/subs/:sid/stock', (req, res) => {
   const rows = D.hwLines.filter(h => h.w.length).map(h => { const m = hwMeta(h.name.replace(/\s*\[.*\]$/, '')) || {}; const present = +m.stock || 0; return { id: m.id || null, name: h.name.replace(/\s*\[.*\]$/, ''), code: m.code || '', unit: h.unit || 'pc', required: +h.qty.toFixed(3), present, balance: Math.max(0, +(h.qty - present).toFixed(3)), group: /SCREW|CAP|PACKER|GASKET|SEAL|FASTNER|SILICON/i.test(h.name) ? 'Accessories and Installation Material' : (m.brand || 'Generic Hardware') } });
   res.json({ rows, required: rows.length, supplied: rows.filter(r => r.present >= r.required).length, toProcure: rows.filter(r => r.balance > 0).length, complete: sw.status === 'dispatched' || ['production_complete'].includes(sw.status) });
 });
+const prodTables = (ents, q) => {
+  const cnt = {}; ents.forEach(e => { cnt[e.item_id] = (cnt[e.item_id] || 0) + 1 });
+  const qe = quoteEntries(q.id).filter(x => cnt[x.it.id]).map(x => ({ ...x, it: { ...x.it, qty: cnt[x.it.id] } }));
+  const D = qcalc.report(qe, prcQ(q.id), getComm(q.id), quoteTotals(q.id), { hw: hwMeta, glass: glassMeta }), M = D.mat, f2 = v => (+v || 0).toFixed(2);
+  const sq = e => +(e.width * e.height / 92903.04).toFixed(2), loc = e => e.location || '-';
+  return [
+    ['Glass cutting list', ['Glass', 'Size (mm)', 'Qty', 'Area (sq ft)', 'Windows'], M.glassReq.flatMap(k => Object.values(k.sizes).sort((a, b) => b.w * b.h - a.w * a.h).map(z => [k.spec, `${z.w} x ${z.h}`, z.qty, f2(z.w * z.h / 92903.04 * z.qty), [...new Set(z.win || [])].join(', ')])).concat(M.glassReq.map(k => [k.spec + ' — total', '', k.pieces, f2(k.sqft), '']))],
+    ['Profile cutting list', ['Code', 'Profile', 'Pieces', 'Length (m)', 'Bars', 'Windows'], M.bars.map(b => [b.code, b.name, b.pieces, f2(b.m), b.bars, ((D.profileLines.find(x => x.code === b.code) || {}).w || []).join(', ')])],
+    ['Reinforcement cutting list', ['Host profile', 'Thickness (mm)', 'Pieces', 'Length (m)', 'Bars'], M.riBars.map(b => [b.host, b.thk, b.pieces, f2(b.m), b.bars])],
+    ['Hardware list', ['Item', 'Qty', 'Unit', 'Windows'], D.hwLines.filter(h => h.w.length).map(h => [h.name, h.qty, h.unit, h.w.join(', ')])],
+    ['Complete production document', ['Window', 'Description', 'Size (mm)', 'Qty', 'Area (sq ft)', 'Glass', 'System'], D.items.map(i => { const it = ents.find(e => e.mark === i.mark) || {}; return [i.mark, i.name, `${i.w} x ${i.h}`, i.qty, f2(i.area), it.glass || '', it.system || ''] })],
+    ['QC checklist', ['No.', 'Window', 'Location', 'Frame size (mm)', 'Glass', 'Stage', 'QC'], ents.map((e, k) => [k + 1, e.mark + ' ' + e.name, loc(e), `${e.width} x ${e.height}`, `${e.glass} ${e.thickness}`, e.stage, e.qc ? 'Passed' : '☐'])],
+    ['Installation list', ['No.', 'Window', 'Location', 'Size (mm)', 'Materials to carry', 'Installed'], ents.map((e, k) => [k + 1, e.mark, loc(e), `${e.width} x ${e.height}`, `${e.system} · ${e.glass} · fixing screws, sealant`, '☐'])],
+    ['Window supply schedule', ['No.', 'Code', 'Type', 'Outer frame (mm)', 'Specification', 'Location'], ents.map((e, k) => [k + 1, e.mark, e.type, `${e.width} x ${e.height}`, `${e.system} / ${e.glass}`, loc(e)])],
+    ['Window area report', ['Window', 'Description', 'Qty', 'Area each (sq ft)', 'Total area (sq ft)'], Object.values(ents.reduce((a, e) => { const r = a[e.mark] = a[e.mark] || [e.mark, e.name, 0, sq(e), 0]; r[2]++; r[4] = +(r[4] + sq(e)).toFixed(2); return a }, {}))]
+  ];
+};
 api.get('/production/subs/:sid/docs/:n', async (req, res) => {
   const sw = db.prepare('SELECT * FROM sub_work_orders WHERE id=?').get(req.params.sid); if (!sw) return res.status(404).end();
   const w = db.prepare('SELECT * FROM work_orders WHERE id=?').get(sw.wo_id), q = db.prepare('SELECT * FROM quotations WHERE id=?').get(w.quotation_id);
   const n = Math.min(9, Math.max(1, +req.params.n || 1)), fmt = ['pdf', 'xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf';
   try {
     const ents = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type FROM swo_items e JOIN quotation_items i ON i.id=e.item_id WHERE e.swo_id=? ORDER BY i.position, e.created_at').all(sw.id);
-    const cnt = {}; ents.forEach(e => { cnt[e.item_id] = (cnt[e.item_id] || 0) + 1 });
-    const qe = quoteEntries(q.id).filter(x => cnt[x.it.id]).map(x => ({ ...x, it: { ...x.it, qty: cnt[x.it.id] } }));
-    const D = qcalc.report(qe, prcQ(q.id), getComm(q.id), quoteTotals(q.id), { hw: hwMeta, glass: glassMeta }), M = D.mat, f2 = v => (+v || 0).toFixed(2);
-    const sq = e => +(e.width * e.height / 92903.04).toFixed(2), loc = e => e.location || '-';
-    const T = [
-      ['Glass cutting list', ['Glass', 'Size (mm)', 'Qty', 'Area (sq ft)', 'Windows'], M.glassReq.flatMap(k => Object.values(k.sizes).sort((a, b) => b.w * b.h - a.w * a.h).map(z => [k.spec, `${z.w} x ${z.h}`, z.qty, f2(z.w * z.h / 92903.04 * z.qty), [...new Set(z.win || [])].join(', ')])).concat(M.glassReq.map(k => [k.spec + ' — total', '', k.pieces, f2(k.sqft), '']))],
-      ['Profile cutting list', ['Code', 'Profile', 'Pieces', 'Length (m)', 'Bars', 'Windows'], M.bars.map(b => [b.code, b.name, b.pieces, f2(b.m), b.bars, ((D.profileLines.find(x => x.code === b.code) || {}).w || []).join(', ')])],
-      ['Reinforcement cutting list', ['Host profile', 'Thickness (mm)', 'Pieces', 'Length (m)', 'Bars'], M.riBars.map(b => [b.host, b.thk, b.pieces, f2(b.m), b.bars])],
-      ['Hardware list', ['Item', 'Qty', 'Unit', 'Windows'], D.hwLines.filter(h => h.w.length).map(h => [h.name, h.qty, h.unit, h.w.join(', ')])],
-      ['Complete production document', ['Window', 'Description', 'Size (mm)', 'Qty', 'Area (sq ft)', 'Glass', 'System'], D.items.map(i => { const it = ents.find(e => e.mark === i.mark) || {}; return [i.mark, i.name, `${i.w} x ${i.h}`, i.qty, f2(i.area), it.glass || '', it.system || ''] })],
-      ['QC checklist', ['No.', 'Window', 'Location', 'Frame size (mm)', 'Glass', 'Stage', 'QC'], ents.map((e, k) => [k + 1, e.mark + ' ' + e.name, loc(e), `${e.width} x ${e.height}`, `${e.glass} ${e.thickness}`, e.stage, e.qc ? 'Passed' : '☐'])],
-      ['Installation list', ['No.', 'Window', 'Location', 'Size (mm)', 'Materials to carry', 'Installed'], ents.map((e, k) => [k + 1, e.mark, loc(e), `${e.width} x ${e.height}`, `${e.system} · ${e.glass} · fixing screws, sealant`, '☐'])],
-      ['Window supply schedule', ['No.', 'Code', 'Type', 'Outer frame (mm)', 'Specification', 'Location'], ents.map((e, k) => [k + 1, e.mark, e.type, `${e.width} x ${e.height}`, `${e.system} / ${e.glass}`, loc(e)])],
-      ['Window area report', ['Window', 'Description', 'Qty', 'Area each (sq ft)', 'Total area (sq ft)'], Object.values(ents.reduce((a, e) => { const r = a[e.mark] = a[e.mark] || [e.mark, e.name, 0, sq(e), 0]; r[2]++; r[4] = +(r[4] + sq(e)).toFixed(2); return a }, {}))]
-    ][n - 1];
-    const [title, head, rows] = T; send(res, await docs.table(fmt, title, head, rows.length ? rows : [['No entries', ...head.slice(1).map(() => '')]], sw.number), MIME[fmt], `${sw.number}-${title.replace(/\s+/g, '-').toLowerCase()}.${fmt}`);
+    if (n === 5) return send(res, await docs.multi(fmt, 'Complete production document', sw.number, prodTables(ents, q).filter((_, i) => i !== 4)), MIME[fmt], `${sw.number}-complete-production-document.${fmt}`);
+    const [title, head, rows] = prodTables(ents, q)[n - 1];
+    send(res, await docs.table(fmt, title, head, rows.length ? rows : [['No entries', ...head.slice(1).map(() => '')]], sw.number), MIME[fmt], `${sw.number}-${title.replace(/\s+/g, '-').toLowerCase()}.${fmt}`);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 api.get('/production/:id/docs/:n', async (req, res) => {
   const w = db.prepare('SELECT * FROM work_orders WHERE id=?').get(req.params.id); if (!w) return res.status(404).end();
   const n = +req.params.n || 1, fmt = ['pdf', 'xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf';
+  if (n === 4) { try { const q = db.prepare('SELECT * FROM quotations WHERE id=?').get(w.quotation_id), all = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type FROM swo_items e JOIN quotation_items i ON i.id=e.item_id JOIN sub_work_orders s ON s.id=e.swo_id WHERE s.wo_id=? ORDER BY i.position, e.created_at').all(w.id);
+    if (!all.length) return res.status(409).json({ error: 'Work order has no saved items' });
+    return send(res, await docs.multi(fmt, 'Complete production document', w.number, prodTables(all, q).filter((_, i) => i !== 4)), MIME[fmt], `${w.number}-complete-production-document.${fmt}`); } catch (e) { return res.status(500).json({ error: e.message }) } }
   const ents = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type, s.number AS sub FROM swo_items e JOIN quotation_items i ON i.id=e.item_id JOIN sub_work_orders s ON s.id=e.swo_id WHERE s.wo_id=? ORDER BY i.position, e.created_at').all(w.id);
   const sq = e => +(e.width * e.height / 92903.04).toFixed(2);
   const T = [
@@ -644,6 +651,7 @@ api.get('/production/:id/docs/:n', async (req, res) => {
   const [title, head, rows] = T, fname = `${w.number}-${title.replace(/\s+/g, '-').toLowerCase()}`;
   try { send(res, await docs.table(fmt, title, head, rows, w.number), MIME[fmt], `${fname}.${fmt}`); } catch (e) { res.status(500).json({ error: e.message }); }
 });
+require('./prodpro')(api, db, { quoteEntries, docs, uid, now, send, MIME });
 api.get('/production/subs/:sid', (req, res) => {
   const s = db.prepare('SELECT * FROM sub_work_orders WHERE id=?').get(req.params.sid); if (!s) return res.status(404).json({ error: 'Not found' });
   const w = db.prepare('SELECT * FROM work_orders WHERE id=?').get(s.wo_id), q = db.prepare('SELECT * FROM quotations WHERE id=?').get(w.quotation_id), c = db.prepare('SELECT * FROM customers WHERE id=?').get(q.customer_id);

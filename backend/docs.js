@@ -297,6 +297,17 @@ async function table(fmt, title, head, rows, number) {
   d.fontSize(15).text(`${title} - ${number}`).moveDown(.5); const cw = 770 / head.length; let y = d.y + 4; d.fontSize(8.5).font('Helvetica-Bold'); head.forEach((h, i) => d.text(h, 36 + i * cw, y, { width: cw - 6 })); d.font('Helvetica'); y += 16;
   rows.forEach(r => { if (y > 540) { d.addPage(); y = 40 } r.forEach((c, i) => d.text(String(c), 36 + i * cw, y, { width: cw - 6, height: 12, ellipsis: true })); y += 15 }); d.end(); return done;
 }
+async function multi(fmt, title, number, secs) {
+  if (fmt === 'xlsx') { const wb = new ExcelJS.Workbook(); secs.forEach(([t, head, rows]) => { const ws = wb.addWorksheet(t.replace(/[\\/?*\[\]:]/g, '-').slice(0, 30)); ws.addRow([`${t} - ${number}`]).font = { bold: true, size: 13 }; const h = ws.addRow(head); h.font = { bold: true }; h.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2F7' } } }); rows.forEach(r => ws.addRow(r)); ws.columns.forEach(c => c.width = 20) }); return Buffer.from(await wb.xlsx.writeBuffer()) }
+  if (fmt === 'docx') { const c = (t, b) => new D.TableCell({ children: [new D.Paragraph({ children: [new D.TextRun({ text: String(t), bold: b, size: 16 })] })] }); const kids = [new D.Paragraph({ children: [new D.TextRun({ text: `${title} - ${number}`, bold: true, size: 32 })] })];
+    secs.forEach(([t, head, rows]) => { kids.push(new D.Paragraph({ spacing: { before: 300 }, children: [new D.TextRun({ text: t, bold: true, size: 24, color: '4A6785' })] }), new D.Table({ rows: [new D.TableRow({ tableHeader: true, children: head.map(h => c(h, true)) }), ...(rows.length ? rows : [head.map((_, i) => i ? '' : 'No entries')]).map(r => new D.TableRow({ children: r.map(x => c(x)) }))] })) });
+    return Buffer.from(await D.Packer.toBuffer(new D.Document({ sections: [{ properties: { page: { size: { orientation: D.PageOrientation.LANDSCAPE } } }, children: kids }] }))) }
+  const d = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' }), done = collect(d);
+  d.fontSize(20).text(title).fontSize(11).fillColor('#555').text(number).fillColor('#000').moveDown(.6); d.fontSize(10);
+  secs.forEach(([t, head, rows], k) => { if (k) d.addPage(); d.fontSize(14).font('Helvetica-Bold').text(`${k + 1}. ${t}`).font('Helvetica'); const cw = 770 / head.length; let y = d.y + 6; d.fontSize(8.5).font('Helvetica-Bold'); head.forEach((h, i) => d.text(h, 36 + i * cw, y, { width: cw - 6 })); d.font('Helvetica'); y += 16;
+    (rows.length ? rows : [['No entries']]).forEach(r => { if (y > 540) { d.addPage(); y = 40 } r.forEach((c, i) => d.text(String(c), 36 + i * cw, y, { width: cw - 6, height: 12, ellipsis: true })); y += 15 }) });
+  d.end(); return done;
+}
 function invoice(inv, co, inWords) {
   const bank = co.bank || {};
   const d = new PDFDocument({ margin: 36, size: 'A4' }), done = collect(d);
@@ -331,4 +342,4 @@ function previewData(kind, c, D) {
   const tiles = [['Customer', c.customer.name || '—'], ['Project', c.project || '—'], ['Number', c.number], ['Windows', `${D.count} design${D.count === 1 ? '' : 's'} · ${D.units} unit${D.units === 1 ? '' : 's'}`], ...(costing ? [['Total area', `${f2(D.area)} sq ft`], ['Cost total', INRc(tr.cost)], ['Net selling', INRc(tr.net)], ['Contribution', INRc(tr.contribution)], ['Margin', `${tr.margin.toFixed(1)} %`], ['Wastage', `${INRc(tr.wastage)} · ${tr.wastePct.toFixed(1)} % of cost`]] : [['Profile bars', String(D.mat.profileBars)], ['GI bars', String(D.mat.giBars)], ['Glass area', `${f2(D.mat.glassArea)} sq ft`], ['Stock length', `${D.mat.stock} mm`]])];
   return { tiles, note: "Pre-production estimate from the quotation's current designs; not a frozen work-order release.", sections: S.map(x => ({ title: x.title, desc: x.desc || '', cols: x.cols.map(k => ({ h: k.h, a: k.a || '' })), rows: x.rows.map(r => Array.isArray(r) ? { c: r, t: '' } : { c: r.c, t: r.t || '' }) })) };
 }
-module.exports = { previewData, model, pdf: quotationPdf, quotationPdf, elevationPdf, reportDoc, xlsx, docx, table, invoice, dwg, quoteDate: fdate, addDays, collect, PDFDocument };
+module.exports = { multi, previewData, model, pdf: quotationPdf, quotationPdf, elevationPdf, reportDoc, xlsx, docx, table, invoice, dwg, quoteDate: fdate, addDays, collect, PDFDocument };
