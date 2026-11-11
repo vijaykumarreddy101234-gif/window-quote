@@ -122,16 +122,21 @@ function compute(d, ctx) {
     const stackTop = stackRows && cols[0].rows.some(r => r.op === 'TOP');
     // band with a top-hung sash (demo Fan left · fixed · top-hung 900x600): Z-mullion at W-36, verticals split at the band, rows +21 mm
     const bandTop = !!(d.band && d.band.op === 'TOP'), bandHm = d.band ? H * (1 - d.band.h) : H, bandHb = d.band ? H * d.band.h : 0;
-    add('Frame', frameCode, bandTop ? [W + 2 * w, W + 2 * w, bandHm + 2 * w, bandHm + 2 * w, bandHb + 2 * w, bandHb + 2 * w] : stackTop ? [W + 2 * w, W + 2 * w, ...cols[0].rows.flatMap(r => [H * r.h + 2 * w, H * r.h + 2 * w])] : [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
+    // L-shaped corner bay (demo 1800x1200, two 900 faces): each face frame and bead lose 62 mm at the corner, no mullion, RSA-60B baypole coupler at H
+    const bayCorner = !!d.bay && d.bayType === 'corner' && cols.length === 2;
+    if (bayCorner) {
+      cols.forEach(c => { const fwid = W * c.w / cols.reduce((a, x) => a + x.w, 0); add('Frame', frameCode, [fwid - 56, fwid - 56, H + 2 * w, H + 2 * w]); });
+      add('Coupler', 'RSA-60B', [H]);
+    } else add('Frame', frameCode, bandTop ? [W + 2 * w, W + 2 * w, bandHm + 2 * w, bandHm + 2 * w, bandHb + 2 * w, bandHb + 2 * w] : stackTop ? [W + 2 * w, W + 2 * w, ...cols[0].rows.flatMap(r => [H * r.h + 2 * w, H * r.h + 2 * w])] : [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
     let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0, zTm = 0;
     const band = d.band && d.band.op ? d.band : null, Hmain = band ? H * (1 - band.h) : H
     const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
       // bead/pane width of a fixed, louvre or fan cell: column width less 40 at each outer frame edge and 17 at a mullion (demo 300 + 600 columns: 243 and 543)
-      const colEdge = W * c.w / totalW - (ci === 0 ? 40 : 17) - (ci === cols.length - 1 ? 40 : 17);
+      const colEdge = W * c.w / totalW - (ci === 0 || bayCorner ? 40 : 17) - (ci === cols.length - 1 || bayCorner ? 40 : 17) - (bayCorner ? 62 : 0);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : band ? H - (bandTop ? 59 : 57) : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
+      if (ci > 0 && !bayCorner) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : band ? H - (bandTop ? 59 : 57) : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
         const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : (stackRows || (c.rows.length > 1 && !band)) ? 17 : 0) + (band ? (bandTop ? 21 : 23) : 0);
         if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += colEdge; }
