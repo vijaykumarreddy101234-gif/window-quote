@@ -116,17 +116,21 @@ function compute(d, ctx) {
     const door = d.door;
     const sidelightDoor = !!door && cols.length > 1 && cols.some(x => x.rows.every(r => r.op === 'FIXED')); // door + side light (demo: Z mullion, 2 mm mullion-side leaf, side light 523 x 1996)
     const frameCode = door ? 'RSC-72OF' : 'RSC-60OF';
-    add('Frame', frameCode, [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
+    // single column of stacked rows (e.g. fixed over top-hung): verticals split at the Z-mullion transom, rows 19 mm shorter each, transom RSC-74ZM at W-36 (demo 900x600 Fixed · top-hung)
+    // stacked rows (single column): with a top-hung sash the transom is a Z-mullion RSC-74ZM at W-36 and the verticals split (demo Fixed top-hung); fixed/louvre stacks use RSC-74TM at W-40 with an unsplit frame (demo Fixed louvre)
+    const stackRows = !door && cols.length === 1 && cols[0].rows.length > 1;
+    const stackTop = stackRows && cols[0].rows.some(r => r.op === 'TOP');
+    add('Frame', frameCode, stackTop ? [W + 2 * w, W + 2 * w, ...cols[0].rows.flatMap(r => [H * r.h + 2 * w, H * r.h + 2 * w])] : [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
-    let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0;
+    let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0, zTm = 0;
     const band = d.band && d.band.op ? d.band : null, Hmain = band ? H * (1 - band.h) : H
     const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
       if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : H - FRAME_FACE + (band ? 0 : 0)); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
-        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE;
-        if (ri > 0) tm += cw - 2 * FRAME_FACE;
+        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0);
+        if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += cw - 2 * FRAME_FACE; }
         idx++;
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
         if (opening && door) {
@@ -165,6 +169,7 @@ function compute(d, ctx) {
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', door ? (sidelightDoor ? 'RSC-74ZM' : 'RSC-60FM') : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
+    if (zTm) add('Transom', 'RSC-74ZM', [zTm]);
     if (beadLens.length) add('Bead', 'RSB-35CB', groupLens(beadLens), { grouped: true });
     if (d.shape && d.shape !== 'rect') { const f = cuts.find(c => c.role === 'Frame'); if (f) { f.kg *= 1.3; f.metres *= 1.3; notes.push('Arc: profile and bead arc length + 30% bending wastage'); } }
     riM = Math.max(0, riM + (cuts.filter(c => c.role === 'Frame').reduce((a, c) => a + c.metres - 0.1 * c.lens.length, 0)));
