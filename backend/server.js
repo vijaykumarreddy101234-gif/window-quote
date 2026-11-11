@@ -12,23 +12,28 @@ if (process.env.VERCEL) { // serverless: writable disk is /tmp only; start from 
 }
 // Persistent database: when TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set (Vercel), use a Turso embedded replica
 // (reads are local, writes go to the shared primary), so data survives cold starts and is shared by every instance.
-const REMOTE = !!(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
+let REMOTE = !!(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
 let db, syncDb = () => {};
+const localDb = () => { db = new Database(DBFILE); db.pragma('journal_mode = WAL'); };
 if (REMOTE || process.env.USE_LIBSQL) {
-  const Libsql = require('libsql'), fs1 = require('fs'), rp = process.env.VERCEL ? '/tmp/replica.db' : path.join(__dirname, 'replica.db');
-  db = REMOTE ? new Libsql(rp, { syncUrl: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }) : new Libsql(DBFILE);
-  const strip = r => { if (r && typeof r === 'object' && !Array.isArray(r) && '_metadata' in r) delete r._metadata; return r };
-  const prep = db.prepare.bind(db); db.prepare = sql => { const st = prep(sql), g = st.get.bind(st); st.get = (...a) => strip(g(...a)); return st };
-  if (REMOTE) {
-    syncDb = () => { try { db.sync() } catch (e) { console.error('sync', e.message) } }; syncDb();
-    // first start on an empty remote database: load the bundled demo data in one round trip
-    let empty = true; try { empty = !db.prepare("SELECT 1 FROM sqlite_master WHERE name='users'").get() } catch (e) {}
-    const seed = path.join(__dirname, 'seed.db');
-    if (empty && fs1.existsSync(seed)) { const S = new Database(seed, { readonly: true }), q = v => v == null ? 'NULL' : Buffer.isBuffer(v) ? `X'${v.toString('hex')}'` : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`, out = [];
-      S.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().forEach(t => { out.push(t.sql + ';'); S.prepare(`SELECT * FROM "${t.name}"`).all().forEach(r => out.push(`INSERT INTO "${t.name}" (${Object.keys(r).map(k => `"${k}"`).join(',')}) VALUES (${Object.values(r).map(q).join(',')});`)) });
-      db.exec('BEGIN;' + out.join('\n') + '\nCOMMIT;'); S.close(); syncDb(); }
-  }
-} else { db = new Database(DBFILE); db.pragma('journal_mode = WAL'); }
+  try {
+    const Libsql = require('libsql'), fs1 = require('fs'), rp = process.env.VERCEL ? '/tmp/replica.db' : path.join(__dirname, 'replica.db');
+    db = REMOTE ? new Libsql(rp, { syncUrl: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }) : new Libsql(DBFILE);
+    const strip = r => { if (r && typeof r === 'object' && !Array.isArray(r) && '_metadata' in r) delete r._metadata; return r };
+    const prep = db.prepare.bind(db); db.prepare = sql => { const st = prep(sql), g = st.get.bind(st); st.get = (...a) => strip(g(...a)); return st };
+    if (REMOTE) {
+      syncDb = () => { try { db.sync() } catch (e) { console.error('sync', e.message) } }; syncDb();
+      // first start on an empty remote database: load the bundled demo data in small chunks
+      let done = false; try { done = !!db.prepare("SELECT 1 FROM sqlite_master WHERE name='_seeded'").get() } catch (e) { console.error('seed check', e.message) }
+      const seed = path.join(__dirname, 'seed.db');
+      if (!done && fs1.existsSync(seed)) { const S = new Database(seed, { readonly: true }), q = v => v == null ? 'NULL' : Buffer.isBuffer(v) ? `X'${v.toString('hex')}'` : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`;
+        for (const t of S.prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+          db.exec(`DROP TABLE IF EXISTS "${t.name}"`); db.exec(t.sql);
+          const rows = S.prepare(`SELECT * FROM "${t.name}"`).all(); for (let i = 0; i < rows.length; i += 25) db.exec(rows.slice(i, i + 25).map(r => `INSERT INTO "${t.name}" (${Object.keys(r).map(k => `"${k}"`).join(',')}) VALUES (${Object.values(r).map(q).join(',')});`).join('\n')) }
+        db.exec('CREATE TABLE _seeded (at TEXT)'); db.exec(`INSERT INTO _seeded VALUES ('${new Date().toISOString()}')`); S.close(); syncDb(); }
+    }
+  } catch (e) { console.error('TURSO INIT FAILED - falling back to local SQLite:', e && e.message); REMOTE = false; syncDb = () => {}; localDb() }
+} else localDb();
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT, role TEXT);
