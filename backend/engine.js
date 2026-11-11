@@ -133,8 +133,8 @@ function compute(d, ctx) {
       const th = c.rows.reduce((a, r) => a + r.h, 0);
       if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : band ? H - (bandTop ? 59 : 57) : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
-        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0) + (band ? (bandTop ? 21 : 23) : 0);
-        if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += cw - 2 * FRAME_FACE; }
+        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : (stackRows || (c.rows.length > 1 && !band)) ? 17 : 0) + (band ? (bandTop ? 21 : 23) : 0);
+        if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += colEdge; }
         idx++;
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
         if (opening && door) {

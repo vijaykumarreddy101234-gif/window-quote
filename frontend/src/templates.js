@@ -46,7 +46,7 @@ export const TEMPLATES = [
   t('v7', G.V, 'Fan right · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), 2), C(R('FAN'), 1)], { band: { at: 'bottom', h: .5, op: 'TOP' } })),
   t('v8', G.V, 'Fan left · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), 1), C(R('FIXED'), 2)], { band: { at: 'bottom', h: .5, op: 'LOUVRE' } })),
   t('v9', G.V, 'Fan right · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), 2), C(R('FAN'), 1)], { band: { at: 'bottom', h: .5, op: 'LOUVRE' } })),
-  t('v10', G.V, 'Fan left · fixed below · louvre right', 'combination', 900, 600, '60 series ventilator', cs([C([R('FAN', .6), R('FIXED', .4)]), C([R('LOUVRE', 1)])])),
+  t('v10', G.V, 'Fan left · fixed below · louvre right', 'combination', 900, 600, '60 series ventilator', cs([C([R('FAN', .5), R('FIXED', .5)], 1), C([R('LOUVRE', 1)], 2)])),
   t('v11', G.V, 'Louvre left · fan right · fixed below', 'combination', 900, 600, '60 series ventilator', cs([C([R('LOUVRE', .6), R('FIXED', .4)]), C([R('FAN', .6), R('FIXED', .4)])])),
   t('b1', G.B, 'L-shaped bay (90°)', 'casement', 1800, 1200, '60 series bay window', cs([C(R('FIXED')), C(R('FIXED'))], { bay: true, bayType: 'corner' })),
 ]
