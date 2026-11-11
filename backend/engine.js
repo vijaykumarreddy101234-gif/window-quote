@@ -131,9 +131,9 @@ function compute(d, ctx) {
       // bead/pane width of a fixed, louvre or fan cell: column width less 40 at each outer frame edge and 17 at a mullion (demo 300 + 600 columns: 243 and 543)
       const colEdge = W * c.w / totalW - (ci === 0 ? 40 : 17) - (ci === cols.length - 1 ? 40 : 17);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : bandTop ? H - 59 : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
+      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : band ? H - (bandTop ? 59 : 57) : H - FRAME_FACE); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
-        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0) + (bandTop ? 21 : 0);
+        const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE - (stackTop ? 19 : stackRows ? 17 : 0) + (band ? (bandTop ? 21 : 23) : 0);
         if (ri > 0) { if (stackTop) zTm += cw - 36; else if (stackRows) tm += cw - 40; else tm += cw - 2 * FRAME_FACE; }
         idx++;
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
@@ -169,7 +169,7 @@ function compute(d, ctx) {
       });
     })
     doCols(cols, Hmain, totalW)
-    if (band) { if (bandTop) zTm += W - 36; else tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
+    if (band) { if (bandTop) zTm += W - 36; else tm += W - 40; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', door ? (sidelightDoor ? 'RSC-74ZM' : 'RSC-60FM') : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
