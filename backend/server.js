@@ -983,7 +983,10 @@ app.get(/^\/profiles\/(clean\/)?([\w.\-]+)\.png$/, (req, res, next) => { // uplo
   if (!f) return next(); if (req.params[0]) return res.status(404).end(); res.sendFile(f) });
 app.use('/api/v1/app', api);
 const dist = path.join(__dirname, '..', 'frontend', 'dist');
-if (require('fs').existsSync(dist)) { app.use(express.static(dist)); app.get(/^\/(?!api).*/, (req, res) => res.sendFile(path.join(dist, 'index.html'))); }
+if (require('fs').existsSync(dist)) {
+  app.use(express.static(dist, { setHeaders: (res, f) => { res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(f) ? 'public, max-age=31536000, immutable' : 'no-cache, no-store, must-revalidate') } }));
+  app.get(/^\/assets\/.*/, (req, res) => res.status(404).end());
+  app.get(/^\/(?!api).*/, (req, res) => { res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate'); res.setHeader('CDN-Cache-Control', 'no-store'); res.setHeader('Vercel-CDN-Cache-Control', 'no-store'); res.sendFile(path.join(dist, 'index.html')) }); }
 const PORT = process.env.PORT || 4000;
 if (!process.env.VERCEL) app.listen(PORT, () => console.log('FenstraWorks API on :' + PORT));
 module.exports = app;
