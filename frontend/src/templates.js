@@ -19,7 +19,7 @@ export const TEMPLATES = [
   t('k1', G.SW, 'Fixed top + sliding', 'combination', 1200, 1800, '60 series fixed window + 62 series sliding window', sl(2, 0, {  fixedTop: .3 , series: '62' })),
   t('sd2', G.SD, '2-panel sliding door', 'sliding', 1800, 2100, '62 series sliding door', sl(2, 0, {  door: true , series: '62' })),
   t('sd3', G.SD, '3-panel sliding door', 'sliding', 2400, 2100, '62 series sliding door', sl(3, 0, { centre: true, door: true, series: '62' })),
-  t('sd4', G.SD, '4-panel sliding door', 'sliding', 3600, 2100, '92 series sliding door', sl(4, 0, {  door: true , series: '92' })),
+  t('sd4', G.SD, '4-panel sliding door', 'sliding', 3000, 2100, '62 series sliding door', sl(4, 0, { door: true, series: '62' })),
   t('sdm', G.SD, 'Sliding door with mesh', 'sliding', 2400, 2100, '92 series sliding door with mesh', sl(3, 1, {  door: true , series: '92' }), { mesh: 'SS mesh' }),
   t('f1', G.CW, 'Fixed', 'fixed', 900, 900, '60 series fixed window', cs(one('FIXED'))),
   t('c1l', G.CW, 'Left-open casement', 'casement', 600, 1200, '60 series casement window', cs(one('LH'))),
