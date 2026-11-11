@@ -8,6 +8,7 @@ async function postFile(path, body, name) {
   const cd = res.headers.get('Content-Disposition') || '', m = /filename="?([^";]+)"?/.exec(cd)
   saveBlob(await res.blob(), m ? m[1] : name)
 }
+const Barcode = ({ bits, h = 26 }) => { const r = []; let i = 0; while (i < bits.length) { if (bits[i] === '1') { let j = i; while (j < bits.length && bits[j] === '1') j++; r.push(<rect key={i} x={i} y="0" width={j - i} height={h} fill="#000" />); i = j } else i++ } return <svg viewBox={`0 0 ${bits.length} ${h}`} preserveAspectRatio="none" style={{ width: '100%', maxWidth: 190, height: h }}>{r}</svg> }
 const Shell = ({ title, onClose, children }) => <div className="modal-bg" onClick={onClose}><div className="modal pp-panel" onClick={e => e.stopPropagation()}><div className="pp-head"><h3>{title}</h3><button className="qt-btn-ghost" onClick={onClose}>×</button></div>{children}</div></div>
 
 export function Labels({ sid, onClose }) {
@@ -24,7 +25,7 @@ export function Labels({ sid, onClose }) {
       <label>Window<select value={win} onChange={e => { setWin(e.target.value); setB(1) }}><option value="">All windows</option>{d.marks.map(m => <option key={m}>{m}</option>)}</select></label></div>
     <div className="pp-card"><b>Label dimensions and alignment</b><div>{F && F.note}</div><div className="ps-hint">Print PDF at actual size / 100%. Disable fit to page. Check the 20 mm calibration line before using adhesive stock.</div><button className="qt-btn-ghost" onClick={() => downloadFile(`/production/subs/${sid}/labels-alignment.pdf?format=${fmt}`, 'alignment.pdf')}>Download alignment PDF</button></div>
     <div className="pp-row"><label>Label plan source<select value={plan} onChange={e => setPlan(e.target.value)}><option value="">No saved allocation (bar mapping unavailable)</option>{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div><div className="ps-hint">Cut ends: 45° mitre · 90° square/mechanical · V-notch · ? pending and blocked from label release.</div>
-    <div className="pp-labels">{d.labels.map((l, i) => <div key={i} className="pp-label"><small>{l.wo}</small><b>{l.member}</b><span>{l.customer}</span><span>{l.win}</span><span>{l.name}</span>{l.bar && <span>{l.bar}</span>}<strong>Size - {l.len} mm</strong></div>)}</div></>}</Shell>
+    <div className="pp-labels">{d.labels.map((l, i) => <div key={i} className="pp-label"><small>{l.wo}</small><b>{l.member}</b><span>{l.customer}</span><span>{l.win}</span><span>{l.name}</span>{l.bar && <span>{l.bar}</span>}<strong>Size - {l.len} mm</strong><Barcode bits={l.bits} /><small>{l.sn}</small></div>)}</div></>}</Shell>
 }
 
 export function BarOpt({ sid, onClose, onSaved }) {
@@ -49,7 +50,12 @@ export function BarOpt({ sid, onClose, onSaved }) {
       <div className="sf-tiles"><div><b>{S.bars}</b><span>Bars</span></div><div><b>{S.placed}</b><span>Placed cuts</span></div><div><b>{S.unplaced}</b><span>Unplaced groups</span></div><div><b>{S.irrecoverable}%</b><span>Irrecoverable</span></div><div><b>{S.utilization}%</b><span>Utilization</span></div><div><b>{S.reusable}%</b><span>Reusable</span></div></div>
       <PlanTable bars={p.bars} /></>}</Shell>
 }
-const PlanTable = ({ bars }) => <div className="pp-scroll"><table className="ps-table"><thead><tr><th>Bar</th><th>Source</th><th>Identity</th><th>Length</th><th>Cuts</th><th>Remainder</th></tr></thead><tbody>{bars.map((b, i) => <tr key={i}><td>{i + 1}</td><td>{b.source}</td><td>{b.code} · {b.name}</td><td>{b.len} mm</td><td title={b.cuts.map(c => c.len).join(' + ')}>{b.cuts.length}: {b.cuts.map(c => c.len).join(' + ')}</td><td>{b.remainder} mm</td></tr>)}</tbody></table></div>
+const Mitre = () => <div className="pp-mitre" />
+const PlanTable = ({ bars }) => <div className="pp-scroll pp-bars">{bars.map((b, i) => { const tot = b.len, used = b.cuts.reduce((a, c) => a + c.len, 0) + b.cuts.length * 0; return <div key={i} className="pp-bar-row">
+  <div className="pp-bar-h"><b>Bar {i + 1}</b><span>{b.code} · {b.name} · {b.source === 'Measured offcut' ? `Offcut ${b.len} mm` : `New bar ${b.len} mm`}</span><span>Rest {b.rest || 0} mm · Waste {b.waste} mm</span></div>
+  <div className="pp-bar-track">{b.cuts.map((c, k) => <div key={k} className="pp-piece" style={{ width: `${c.len / tot * 100}%` }}><Mitre w={100} len={c.len} /><b>{c.len}</b><i className="a l">45°</i><i className="a r">45°</i></div>)}{b.remainder > 0 && <div className={'pp-rest' + (b.rest ? ' keep' : '')} style={{ width: `${b.remainder / tot * 100}%` }}>{b.rest ? `Rest ${b.rest}` : ''}</div>}</div>
+  <div className="pp-bar-cap">{b.cuts.map((c, k) => <div key={k} style={{ width: `${c.len / tot * 100}%` }}><b>{k + 1}) {c.win}</b>{c.dim && <em>{c.dim}</em>}<span>{c.pos}</span>{c.loc && <span>{c.loc}</span>}</div>)}</div></div> })}</div>
+const PlanTableOld = ({ bars }) => <div className="pp-scroll"><table className="ps-table"><thead><tr><th>Bar</th><th>Source</th><th>Identity</th><th>Length</th><th>Cuts</th><th>Remainder</th></tr></thead><tbody>{bars.map((b, i) => <tr key={i}><td>{i + 1}</td><td>{b.source}</td><td>{b.code} · {b.name}</td><td>{b.len} mm</td><td title={b.cuts.map(c => c.len).join(' + ')}>{b.cuts.length}: {b.cuts.map(c => c.len).join(' + ')}</td><td>{b.remainder} mm</td></tr>)}</tbody></table></div>
 
 export function SavedPlans({ sid, onClose }) {
   const [l, setL] = useState(null), [v, setV] = useState(null)
