@@ -63,7 +63,7 @@ function compute(d, ctx) {
     if (ctr && mesh) { widths = [W / 4 - 1, W / 2 + 66, W / 4 - 1]; meshN = 2; meshW = W / 4 - 1; }
     else if (ctr) {
       const dw = Array.isArray(d.widths) && d.widths.length === 3 && Math.abs(d.widths.reduce((a, b) => a + (+b || 0), 0) - W) < 2 ? d.widths.map(Number) : [W / 4, W / 2, W / 4];
-      widths = [dw[0] - 6, dw[1] + 65, dw[2] - 6];
+      widths = isDoor ? [dw[0] + 6, dw[1] + 90, dw[2] + 6] : [dw[0] - 6, dw[1] + 65, dw[2] - 6];
     }
     else {
       // unequal sash sizes: d.widths = visible leaf widths (sum = W); equal otherwise
