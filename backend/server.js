@@ -208,7 +208,8 @@ function designOf(it) {
   return { ...d, W: it.width, H: it.height, glassName: it.glass };
 }
 const SERIES_OK = ['53', '62', '80', '92', '95', '112'];
-function fullEngine(it) {
+function fullEngine(it) { try { return fullEngine0(it) } catch (e) { console.error('engine', it && it.mark, e.message); return null } }
+function fullEngine0(it) {
   if (!it.design && it.type === 'casement' && /door/i.test((it.system || '') + ' ' + (it.name || ''))) return compute({ kind: 'grid', door: true, cols: [{ w: 1, rows: [{ h: 1, op: 'RH' }] }], W: it.width, H: it.height, glassName: it.glass }, { prof, glassRate, hwFind, p: prcQ(it.quotation_id), cfg: cfg() });
   if (!it.design && (it.type === 'casement' || it.type === 'fixed')) return engine(it);
   const d = designOf(it); if (!d) return null;
