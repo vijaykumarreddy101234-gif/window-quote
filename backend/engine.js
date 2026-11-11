@@ -155,8 +155,8 @@ function compute(d, ctx) {
             const fh = sidelightDoor ? H - 104 : ch - 2 * FRAME_FACE;
             beadLens.push(fw, fw, fh, fh); glassPanes.push({ name: 'C' + idx, w: fw, h: fh });
           }
-          else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); }
-          else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); }
+          else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); glassPanes.push({ name: 'L' + idx, w: cw - 2 * FRAME_FACE, h: ch - 2 * FRAME_FACE }); }
+          else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); const fw = cw - 2 * FRAME_FACE, fh = ch - 2 * FRAME_FACE; beadLens.push(fw, fw, fh, fh); } // fan cell: bead only, no glass, as demo (Exhaust fan 300: bead 4 x 220)
         }
       });
     })
