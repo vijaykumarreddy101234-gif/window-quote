@@ -1,5 +1,5 @@
 // Quotation documents: PDF / Excel / Word in six languages.
-const PDFDocument = require('pdfkit'), ExcelJS = require('exceljs'), D = require('docx');
+const PDFBase = require('pdfkit'), ExcelJS = require('exceljs'), D = require('docx');
 const path = require('path'), fs = require('fs');
 const F = n => path.join(__dirname, 'node_modules/@fontsource', n);
 const FONTS = {
@@ -24,6 +24,8 @@ const D_ = D;
 // ---------------------------------------------------------------------------------------------
 // Printable documents laid out like the demo's PDFs: Noto Sans, logo header, tiles, tables, footer.
 const NF = k => (globalThis.__assets && globalThis.__assets[k]) || fs.readFileSync(path.join(__dirname, k === 'logo' ? 'assets/scraft-logo.png' : `node_modules/@fontsource/noto-sans/files/noto-sans-latin-${k === 'reg' ? 400 : 700}-normal.woff`));
+// pdfkit's built-in Helvetica files are not bundled on Vercel: alias the standard names to the bundled Noto fonts
+class PDFDocument extends PDFBase { constructor(o) { super(o); this.registerFont('Helvetica', NF('reg')); this.registerFont('Helvetica-Bold', NF('bold')) } }
 const COL = { blue: '#4a6785', ink: '#2d3136', grey: '#6e7681', band: '#e6ecf0', tile: '#f4f5f7', rule: '#cdd5dc', head: '#dde6ee', alt: '#f3f3f0', tot: '#ecf0e7', brown: '#8a5a14', dark: '#34495e', line: '#d9e0e6' };
 const f2 = n => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const f0 = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
