@@ -5,9 +5,9 @@ const Database = require('better-sqlite3');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 
-let DBFILE = path.join(__dirname, 'fenestra.db');
+let DBFILE = process.env.DB_FILE || path.join(__dirname, 'fenestra.db');
 if (process.env.VERCEL) { // serverless: writable disk is /tmp only; start from the bundled demo data
-  const fs0 = require('fs'); DBFILE = '/tmp/fenestra.db';
+  const fs0 = require('fs'); DBFILE = process.env.DB_FILE || '/tmp/fenestra.db';
   if (!fs0.existsSync(DBFILE) && fs0.existsSync(path.join(__dirname, 'seed.db'))) fs0.copyFileSync(path.join(__dirname, 'seed.db'), DBFILE);
 }
 // Persistent database: when TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set (Vercel), use a Turso embedded replica

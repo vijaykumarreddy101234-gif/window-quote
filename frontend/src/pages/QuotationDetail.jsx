@@ -13,9 +13,9 @@ export default function QuotationDetail() {
   const [q, setQ] = useState(null); const [tab, setTab] = useState('windows'); const [edit, setEdit] = useState(null); const [picked, setPicked] = useState([]); const [note, setNote] = useState(false)
   const load = () => api(`/quotations/${id}`).then(setQ).catch(() => setQ(false))
   useEffect(() => { load() }, [id])
-  if (q === false) return <div className="card">Quotation not found.</div>
   const [glassOpts, setGlassOpts] = useState([]); useEffect(() => { api('/glass').then(g => setGlassOpts((g || []).map(x => x.name))).catch(() => {}) }, [])
   const [lang, setLang] = useState('en'); const [dlOpen, setDlOpen] = useState(false); const [send, setSend] = useState(null)
+  if (q === false) return <div className="card">Quotation not found.</div>
   if (!q) return null
   const p = q.pricing; const locked = q.status !== 'draft'
   const stepIdx = q.workOrder ? 3 : STEPS.indexOf(q.status)
