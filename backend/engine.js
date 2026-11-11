@@ -48,6 +48,11 @@ function compute(d, ctx) {
       return { cuts: [], kg: 0, area: +((W * H) / SQM).toFixed(2), glassArea: 0, panes: [], rows: [], materialTotal: 0, labour: [], totalCost: 0, unit: null, tax: 0, unitInc: 0, perSqftInc: 0, hardware: [], notes, options, error, includeMesh: true, series: seriesOut, meshCode: null };
     }
     if (!options[0].choices.includes(frameCode)) options[0].choices.unshift(frameCode);
+    if (n >= 4 && sashCode === 'RSS-60ES') {
+      // demo: eco 4-leaf sliding needs an inline sash adaptor for the 60x35 sash; a frame coupler cannot replace it
+      error = 'Eco-Sliding: four-panel sliding requires one inline sash adaptor with a seating section compatible with sash RSS-60ES; a frame coupler cannot replace it';
+      return { cuts: [], kg: 0, area: +((W * H) / SQM).toFixed(2), glassArea: 0, panes: [], rows: [], materialTotal: 0, labour: [], totalCost: 0, unit: null, tax: 0, unitInc: 0, perSqftInc: 0, hardware: [], notes, options, error, includeMesh: !!mesh, series: seriesOut, meshCode: meshCode || null };
+    }
     if ((TRACKS[frameCode] || 2) < need) {
       error = `frame ${frameCode} has ${TRACKS[frameCode]} tracks; ${n} sliding leaves${mesh ? ' + mesh' : ''} need ${need}`;
       return { cuts: [], kg: 0, area: +((W * H) / SQM).toFixed(2), glassArea: 0, panes: [], rows: [], materialTotal: 0, labour: [], totalCost: 0, unit: null, tax: 0, unitInc: 0, perSqftInc: 0, hardware: [], notes, options, error, includeMesh: !!mesh, series: seriesOut };

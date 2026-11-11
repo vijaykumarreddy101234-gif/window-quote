@@ -15,7 +15,7 @@ export const TEMPLATES = [
   t('s4', G.SW, '4-panel sliding', 'sliding', 2800, 1200, '62 series sliding window', sl(4, 0, { series: '62' })),
   t('s2m', G.SW, '2-panel sliding with mesh', 'sliding', 1200, 1200, '80 series sliding window', sl(2, 1, { series: '80' }), { mesh: 'Mesh' }),
   t('s3m', G.SW, '3-panel sliding with mesh', 'sliding', 1800, 1200, '80 series sliding window', sl(3, 1, { centre: true, series: '80' }), { mesh: 'Mesh' }),
-  t('s4m', G.SW, '4-panel sliding with mesh', 'sliding', 2800, 1200, '112 series sliding window', sl(4, 2, { series: '112' }), { mesh: 'Mesh' }),
+  t('s4m', G.SW, '4-panel sliding with mesh', 'sliding', 2800, 1200, '80 series sliding window', sl(4, 2, { series: '80' }), { mesh: 'Mesh' }),
   t('k1', G.SW, 'Fixed top + sliding', 'combination', 1200, 1800, '60 series fixed window + 62 series sliding window', sl(2, 0, {  fixedTop: .3 , series: '62' })),
   t('sd2', G.SD, '2-panel sliding door', 'sliding', 1800, 2100, '62 series sliding door', sl(2, 0, {  door: true , series: '62' })),
   t('sd3', G.SD, '3-panel sliding door', 'sliding', 2700, 2100, '62 series sliding door', sl(3, 0, { centre: true, door: true, series: '62' })),
