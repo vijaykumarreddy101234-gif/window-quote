@@ -122,14 +122,15 @@ function compute(d, ctx) {
     const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(H - FRAME_FACE + (band ? 0 : 0));
+      if (ci > 0) mullP.push(door ? H - 88 : H - FRAME_FACE + (band ? 0 : 0)); // door: fly mullion RSC-60FM as demo
       c.rows.forEach((r, ri) => {
         const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE;
         if (ri > 0) tm += cw - 2 * FRAME_FACE;
         idx++;
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
         if (opening && door) {
-          const sw = cw - 82, sh = ch - 82, gw = sw - 174, gh = sh - 174;
+          // door leaf: column less 41 mm at each frame edge (fly mullion adds nothing), as demo: single 818, double 859
+          const sw = W * c.w / totalW - (ci === 0 ? 41 : 0) - (ci === cols.length - 1 ? 41 : 0), sh = ch - 82, gw = sw - 174, gh = sh - 174;
           sashLens.push(sw, sw, sh, sh); beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: 'C' + idx, w: gw, h: gh });
           riM += ((sw + sh) * 2 - 400) / 1000;
           hardware += 190 + 3 * 243.54 + 1002; hw.push({ name: 'CASEMENT DOUBLE SIDE DOOR HANDLE · WHITE', qty: 1, rate: 190 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }, { name: 'CASEMENT DOOR ESPAG WITH CYLINDER 1800 · WHITE', qty: 1, rate: 1002 });
@@ -156,7 +157,7 @@ function compute(d, ctx) {
     doCols(cols, Hmain, totalW)
     if (band) { tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
-    if (mullP.length) add('Mullion', 'RSC-74TM', mullP);
+    if (mullP.length) add('Mullion', door ? 'RSC-60FM' : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
     if (beadLens.length) add('Bead', 'RSB-35CB', groupLens(beadLens), { grouped: true });
     if (d.shape && d.shape !== 'rect') { const f = cuts.find(c => c.role === 'Frame'); if (f) { f.kg *= 1.3; f.metres *= 1.3; notes.push('Arc: profile and bead arc length + 30% bending wastage'); } }
