@@ -241,19 +241,36 @@ app.use(cors());
 app.use((req, res, next) => /^\/api\/v1\/app\/(brands\/catalogue|profiles\/import|profiles\/[^/]+\/image|inventory\/hardware-import|glass\/import)/.test(req.path) ? next() : express.json()(req, res, next));
 const api = express.Router();
 
+// Stateless signed tokens: on serverless the DB resets between instances, so a token stored in
+// the tokens table vanishes and the user is bounced back to login. A v1 token carries the user id
+// and expiry, signed with HMAC, and is verified without any DB row. base64 never contains '.', so
+// splitting on '.' is safe.
+const AUTH_SECRET = process.env.AUTH_SECRET || 'fenstraworks-auth';
+const tsig = s => crypto.createHmac('sha256', AUTH_SECRET).update(s).digest('hex').slice(0, 32);
+const mkToken = userId => { const p = Buffer.from(JSON.stringify({ u: userId, x: Date.now() + 30 * 864e5 })).toString('base64'); return 'v1.' + p + '.' + tsig(p) };
+const tokenUser = t => {
+  if (!t) return null;
+  if (t.startsWith('v1.')) {
+    const [, p, s] = t.split('.');
+    if (!p || s !== tsig(p)) return null;
+    try { const d = JSON.parse(Buffer.from(p, 'base64').toString()); return d.x > Date.now() ? d.u : null } catch (e) { return null }
+  }
+  const row = db.prepare('SELECT user_id FROM tokens WHERE token=?').get(t); // older DB tokens still work on the desktop server
+  return row && row.user_id;
+};
+
 api.post('/auth/login', (req, res) => {
   const { email, password } = req.body;
   const u = db.prepare('SELECT * FROM users WHERE email=? AND password=?').get(email, password);
   if (!u) return res.status(401).json({ error: 'Invalid email or password' });
-  const token = uid();
-  db.prepare('INSERT INTO tokens VALUES (?,?)').run(token, u.id);
-  res.json({ token, user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+  res.json({ token: mkToken(u.id), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
 });
 api.use((req, res, next) => {
   const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
-  const row = db.prepare('SELECT user_id FROM tokens WHERE token=?').get(t);
-  if (!row) return res.status(401).json({ error: 'Unauthorized' });
-  req.user = db.prepare('SELECT id,name,email,role FROM users WHERE id=?').get(row.user_id);
+  const userId = tokenUser(t);
+  const user = userId && db.prepare('SELECT id,name,email,role FROM users WHERE id=?').get(userId);
+  if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  req.user = user;
   next();
 });
 api.get('/auth/me', (req, res) => res.json(req.user));
