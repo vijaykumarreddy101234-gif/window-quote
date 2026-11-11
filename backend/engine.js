@@ -111,10 +111,11 @@ function compute(d, ctx) {
     add('Frame', frameCode, [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
     let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0;
-    cols.forEach((c, ci) => {
+    const band = d.band && d.band.op ? d.band : null, Hmain = band ? H * (1 - band.h) : H
+    const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(H - FRAME_FACE);
+      if (ci > 0) mullP.push(H - FRAME_FACE + (band ? 0 : 0));
       c.rows.forEach((r, ri) => {
         const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE;
         if (ri > 0) tm += cw - 2 * FRAME_FACE;
@@ -143,7 +144,9 @@ function compute(d, ctx) {
           else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); }
         }
       });
-    });
+    })
+    doCols(cols, Hmain, totalW)
+    if (band) { tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);

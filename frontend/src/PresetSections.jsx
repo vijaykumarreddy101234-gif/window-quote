@@ -18,6 +18,9 @@ function Part({ P, code, part, m }) {
   return <g transform={`matrix(${m.join(' ')})`}><g transform={`matrix(${inner.join(' ')})`}><image href={P.src} x="0" y="0" width={w} height={h} preserveAspectRatio="none" /></g></g>
 }
 const BLUE = '#4aa3d8', GREY = '#64748b'
+// a single profile outline (mm units, y up) placed with an arbitrary outer transform string — used by the bay plan
+export function ProfileShape({ code, transform, scale = 1 }) { const vp = vecPaths(code); if (!vp) return null
+  return <g transform={transform}><g transform={`scale(${scale}) scale(1,-1) scale(.1)`} fill="#fbfbfa" stroke="#3f4a5a" strokeWidth=".8" strokeLinejoin="round"><path d={vp.body} fillRule="evenodd" vectorEffect="non-scaling-stroke" />{vp.gasket && <path d={vp.gasket} fillRule="evenodd" vectorEffect="non-scaling-stroke" />}</g></g> }
 // glass drawn at its real thickness (light-blue pane with a darker edge), like the demo
 const Glass = ({ k, x1, y1, x2, y2, t }) => { const vert = Math.abs(x1 - x2) < Math.abs(y1 - y2), th = Math.max(2, t); return vert
   ? <rect key={k} x={x1 - th / 2} y={Math.min(y1, y2)} width={th} height={Math.abs(y2 - y1)} fill="#cfe6fa" stroke="#7ab8e8" strokeWidth=".6" />

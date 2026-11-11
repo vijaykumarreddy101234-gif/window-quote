@@ -16,9 +16,6 @@ export const TEMPLATES = [
   t('s2m', G.SW, '2-panel sliding with mesh', 'sliding', 1200, 1200, '80 series sliding window', sl(2, 1, { series: '80' }), { mesh: 'Mesh' }),
   t('s3m', G.SW, '3-panel sliding with mesh', 'sliding', 1800, 1200, '92 series sliding window', sl(3, 1, { series: '92' }), { mesh: 'Mesh' }),
   t('s4m', G.SW, '4-panel sliding with mesh', 'sliding', 2800, 1200, '112 series sliding window', sl(4, 2, { series: '112' }), { mesh: 'Mesh' }),
-  t('s2m', G.SW, '2-panel sliding with mesh', 'sliding', 1200, 1200, '92 series sliding window with mesh', sl(2, 1, { series: '92' }), { mesh: 'SS mesh' }),
-  t('s3m', G.SW, '3-panel sliding with mesh', 'sliding', 1800, 1200, '80 series sliding window with mesh', sl(3, 1, { series: '80' }), { mesh: 'SS mesh' }),
-  t('s4m', G.SW, '4-panel sliding with mesh', 'sliding', 2800, 1200, '80 series sliding window with mesh', sl(4, 1, { series: '80' }), { mesh: 'SS mesh' }),
   t('k1', G.SW, 'Fixed top + sliding', 'combination', 1200, 1800, '60 series fixed window + 62 series sliding window', sl(2, 0, {  fixedTop: .3 , series: '62' })),
   t('sd2', G.SD, '2-panel sliding door', 'sliding', 1800, 2100, '62 series sliding door', sl(2, 0, {  door: true , series: '62' })),
   t('sd3', G.SD, '3-panel sliding door', 'sliding', 2700, 2100, '62 series sliding door', sl(3, 0, { centre: true, door: true, series: '62' })),
@@ -45,10 +42,10 @@ export const TEMPLATES = [
   t('v3', G.V, 'Exhaust fan', 'combination', 450, 450, '60 series ventilator', cs(one('FAN'))),
   t('v4', G.V, 'Fixed · top-hung', 'combination', 600, 900, '60 series ventilator', cs([C([R('FIXED', .6), R('TOP', .4)])])),
   t('v5', G.V, 'Fixed · louvre', 'combination', 600, 900, '60 series ventilator', cs([C([R('FIXED', .6), R('LOUVRE', .4)])])),
-  t('v6', G.V, 'Fan left · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C([R('FAN', .6), R('TOP', .4)]), C([R('FIXED', .6), R('FIXED', .4)])])),
-  t('v7', G.V, 'Fan right · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C([R('FIXED', .6), R('FIXED', .4)]), C([R('FAN', .6), R('TOP', .4)])])),
-  t('v8', G.V, 'Fan left · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C([R('FAN', .6), R('LOUVRE', .4)]), C([R('FIXED', .6), R('FIXED', .4)])])),
-  t('v9', G.V, 'Fan right · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C([R('FIXED', .6), R('FIXED', .4)]), C([R('FAN', .6), R('LOUVRE', .4)])])),
+  t('v6', G.V, 'Fan left · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), .4), C(R('FIXED'), .6)], { band: { at: 'bottom', h: .4, op: 'TOP' } })),
+  t('v7', G.V, 'Fan right · fixed · top-hung', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), .6), C(R('FAN'), .4)], { band: { at: 'bottom', h: .4, op: 'TOP' } })),
+  t('v8', G.V, 'Fan left · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FAN'), .4), C(R('FIXED'), .6)], { band: { at: 'bottom', h: .4, op: 'LOUVRE' } })),
+  t('v9', G.V, 'Fan right · fixed · louvre', 'combination', 900, 600, '60 series ventilator', cs([C(R('FIXED'), .6), C(R('FAN'), .4)], { band: { at: 'bottom', h: .4, op: 'LOUVRE' } })),
   t('v10', G.V, 'Fan left · fixed below · louvre right', 'combination', 900, 600, '60 series ventilator', cs([C([R('FAN', .6), R('FIXED', .4)]), C([R('LOUVRE', 1)])])),
   t('v11', G.V, 'Louvre left · fan right · fixed below', 'combination', 900, 600, '60 series ventilator', cs([C([R('LOUVRE', .6), R('FIXED', .4)]), C([R('FAN', .6), R('FIXED', .4)])])),
   t('b1', G.B, 'L-shaped bay (90°)', 'casement', 1800, 1200, '60 series bay window', cs([C(R('FIXED')), C(R('FIXED'))], { bay: true, bayType: 'corner' })),
@@ -60,6 +57,6 @@ export const HW_FINISH = ['Match window color', 'White', 'Black', 'Brown', 'Silv
 export const SHAPES = [['rect', 'Rectangle'], ['arch', 'Arch top'], ['half', 'Half round'], ['multi', 'Multi-faced'], ['corner', 'Corner bay'], ['splay', 'Splayed bay'], ['box', 'Box bay']]
 
 // Gallery order/visibility exactly as the reference app (33 designs; bay sits after "Fixed").
-const HIDE = new Set(['k1', 'sdm', 's2m', 's3m', 's4m', 'f2', 'f3', 'k2', 'k3', 'odf'])
+const HIDE = new Set(['k1', 'sdm', 'f2', 'f3', 'k2', 'k3', 'odf'])
 export const GALLERY = (() => { const l = TEMPLATES.filter(x => !HIDE.has(x.id) && x.id !== 'b1'); const i = l.findIndex(x => x.id === 'f1'); l.splice(i + 1, 0, TEMPLATES.find(x => x.id === 'b1')); return l })()
 export const CAT_ICONS = { 'All Designs': 'M4 4h7v7H4z M13 4h7v7h-7z M13 13h7v7h-7z M4 13h7v7H4z', 'SLIDING WINDOWS': 'M3 5h18v14H3z M12 5v14 M7 12h3 M8.5 10l2 2-2 2 M17 12h-3 M15.5 10l-2 2 2 2', 'SLIDING DOORS': 'M5 3h14v18H5z M2 21h20 M12 3v18 M7 12h3 M8.5 10l2 2-2 2 M17 12h-3 M15.5 10l-2 2 2 2', 'CASEMENT WINDOWS': 'M3 5h18v14H3z M3 5l18 7-18 7', 'CASEMENT DOORS': 'M6 3h12v18H6z M2 21h20 M6 3l12 9-12 9', VENTILATORS: 'M6 6h12v12H6z M6 10h12 M6 14h12', 'BAY WINDOWS': 'M2 7l5 10h10l5-10' }

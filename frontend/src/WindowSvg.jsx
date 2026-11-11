@@ -25,7 +25,7 @@ function Mitre({ x, y, w, h, t, fill = '#fbfbfa' }) {
     {P(`${x},${y + h} ${x + w},${y + h} ${x + w - t},${y + h - t} ${x + t},${y + h - t}`)}{P(`${x},${y} ${x + t},${y + t} ${x + t},${y + h - t} ${x},${y + h}`)}</g>
 }
 function Glass({ x, y, w, h, mesh, tint }) {
-  if (mesh) return <g><rect x={x} y={y} width={w} height={h} fill="url(#mesh)" stroke="#94a3b8" strokeWidth=".6" /></g>
+  if (mesh) return <g><rect x={x} y={y} width={w} height={h} fill={tint || 'url(#gl)'} /><rect x={x} y={y} width={w} height={h} fill="url(#mesh)" stroke="#94a3b8" strokeWidth=".6" /></g>
   return <g><rect x={x} y={y} width={w} height={h} fill={tint || 'url(#gl)'} stroke="#8fb9d6" strokeWidth=".6" /><polygon points={`${x + w * .62},${y} ${x + w * .8},${y} ${x + w * .2},${y + h} ${x + w * .05},${y + h}`} fill="#fff" fillOpacity=".35" /></g>
 }
 const TINT = { Frosted: '#eef2f5', 'Tinted bronze': '#cdb79c', 'Tinted grey': '#aeb7bf', 'Reflective blue': '#8db6d9' }
@@ -49,7 +49,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const codes = { frame: codeOf('Frame'), sash: codeOf('Sash'), bead: codeOf('Bead'), il: codeOf('Interlock'), mesh: codeOf('Mesh Sash'), mull: codeOf('Mullion') }
   const G = useProfiles(Object.values(codes))
   const D = design || getDesign(item), W = item.width, H = item.height
-  if (D.bay && !mini && D.kind === 'grid' && (D.cols || []).length > 1) return <BayDrawing item={item} design={D} side={side} selected={selected} onSelect={onSelect} />
+  if (D.bay && D.kind === 'grid' && (D.cols || []).length > 1) return <BayDrawing item={item} design={D} side={side} selected={selected} onSelect={onSelect} mini={mini} />
   const k = mini ? Math.min(150 / W, 150 / H) : Math.min(500 / W, 360 / H), w = W * k, h = H * k
   const frame = Math.max(6, 46 * k), sash = Math.max(5, 40 * k)
   const L = dims ? 128 : 6, T = dims ? 46 : 6, Rm = dims ? 76 : 6, B = dims ? 120 : 6
@@ -134,9 +134,11 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   } else {
     const cols = D.cols || [], tw = cols.reduce((a, c) => a + c.w, 0) || 1
     let cx = rg.x, idx = 0
+    const band = D.band && D.band.op ? D.band : null, bh = band ? rg.h * band.h : 0, rgMain = band ? { ...rg, y: band.at === 'top' ? rg.y + bh : rg.y, h: rg.h - bh } : rg, rgBand = band ? { ...rg, y: band.at === 'top' ? rg.y : rg.y + rg.h - bh, h: bh } : null
+    const layoutCols = (cols, rg, isBand) => { const tw = cols.reduce((a, c) => a + c.w, 0) || 1; let cx = rg.x
     cols.forEach((c, ci) => {
       const cw = rg.w * c.w / tw, th = c.rows.reduce((a, r) => a + r.h, 0) || 1
-      let cy = rg.y; colsW.push(W * c.w / tw)
+      let cy = rg.y; if (!isBand) colsW.push(W * c.w / tw)
       c.rows.forEach((r, ri) => {
         const ch = rg.h * r.h / th, x = cx + (ci ? frame * .3 : 0), y = cy + (ri ? frame * .3 : 0), ww = cw - (ci ? frame * .3 : 0), hh = ch - (ri ? frame * .3 : 0); idx++
         const open = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN', cur = idx, nn = ++num
@@ -165,17 +167,19 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
           g.push(<Glass key="g" x={x + (ww > 40 ? 0 : 0)} y={y} w={ww} h={hh} tint={tint} />, <g key="gb">{gb(x, y, ww, hh)}</g>)
           if (dims) g.push(tag(x + ww / 2, y + 4, 'F' + cur, 'lab'), circ(x + ww / 2, y + hh / 2, nn, 'n'), gsz('C' + cur, x + ww / 2, y + hh / 2 + 18))
         }
-        body.push(<g key={ci + '-' + ri} {...sel(cur - 1)}>{g}{selected === cur - 1 && <rect x={x} y={y} width={ww} height={hh} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="4 2" />}</g>)
+        body.push(<g key={(isBand ? 'b' : '') + ci + '-' + ri} {...(isBand ? {} : sel(cur - 1))}>{g}{!isBand && selected === cur - 1 && <rect x={x} y={y} width={ww} height={hh} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="4 2" />}</g>)
         if (ri && onGeom) { const rn = c.rows.map(q => q.h / th), cc = ci; grips.push(grip('tg' + ci + '-' + ri, cx, cy, cw, false, (sx, sy) => { const [nt, pp] = clampSplit(rn, ri - 1, (sy - rg.y) / rg.h), n2 = Math.round(nt * 1000) / 1000; return d => ({ ...d, cols: d.cols.map((q, k) => k === cc ? { ...q, rows: q.rows.map((r2, j) => ({ ...r2, h: j === ri - 1 ? n2 : j === ri ? +(pp - n2).toFixed(3) : +rn[j].toFixed(3) })) } : q) }) })) }
         if (ri) body.push(<rect key={'tm' + ci + ri} x={cx} y={cy - frame * .3} width={cw} height={frame * .6} fill={fillP} stroke={STROKE} strokeWidth=".8" />)
-        if (ci === 0 && c.rows.length > 1 && ri < c.rows.length - 1) dimsV.push([ri === 0 ? rg.y - frame : dimsV[dimsV.length - 1][1], cy + ch, Math.round(H * r.h / th * (1 - rk / h)), 'r' + ri])
+        if (!isBand && ci === 0 && c.rows.length > 1 && ri < c.rows.length - 1) dimsV.push([ri === 0 ? rg.y - frame : dimsV[dimsV.length - 1][1], cy + ch, Math.round(H * r.h / th * (1 - rk / h)), 'r' + ri])
         cy += ch
       })
       if (ci && onGeom) { const cn = cols.map(q => q.w / tw), cc = ci; grips.push(grip('mg' + ci, cx, rg.y, rg.h, true, sx => { const [nl, pp] = clampSplit(cn, cc - 1, (sx - rg.x) / rg.w), n2 = Math.round(nl * 1000) / 1000; return d => ({ ...d, cols: d.cols.map((q, k) => ({ ...q, w: k === cc - 1 ? n2 : k === cc ? +(pp - n2).toFixed(3) : +cn[k].toFixed(3) })) }) })) }
-      colInfo.push({ x0: cx - ox, x1: cx - ox + cw, open: c.rows.some(r => r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN') })
+      if (!isBand) colInfo.push({ x0: cx - ox, x1: cx - ox + cw, open: c.rows.some(r => r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN') })
       if (ci) body.push(<rect key={'mu' + ci} x={cx - frame * .3} y={rg.y} width={frame * .6} height={rg.h} fill={fillP} stroke={STROKE} strokeWidth=".8" />)
       cx += cw
-    })
+    }) }
+    layoutCols(cols, rgMain, false)
+    if (band) { layoutCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], rgBand, true); body.push(<rect key="bandbar" x={rg.x} y={(band.at === 'top' ? rgBand.y + bh : rgBand.y) - frame * .3} width={rg.w} height={frame * .6} fill={fillP} stroke={STROKE} strokeWidth=".8" />); if (onGeom) grips.push(grip('bandg', rg.x, band.at === 'top' ? rgBand.y + bh : rgBand.y, rg.w, false, (sx, sy) => d => ({ ...d, band: { ...d.band, h: Math.round(Math.min(.8, Math.max(.1, band.at === 'top' ? (sy - rg.y) / rg.h : 1 - (sy - rg.y) / rg.h)) * 100) / 100 } }))) }
   }
 
   // ---- dimensions ----
