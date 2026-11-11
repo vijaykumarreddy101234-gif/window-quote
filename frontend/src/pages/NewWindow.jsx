@@ -1,4 +1,6 @@
 import { useState } from 'react'
+// demo default glass: casement, ventilator, bay and fixed designs 4 mm; sliding designs 5 mm
+const glassFor = t => (t && /casement|ventilator|bay|fixed/i.test(t.system || '') && !/sliding/i.test(t.system || '')) ? '4 mm clear glass' : '5 mm clear glass'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api'
 import { askForm } from '../dialog'
@@ -13,7 +15,7 @@ export default function NewWindow() {
   const make = async t => {
     const f = await askForm(`Window code for ${t ? t.name : 'blank window'}`, [{ k: 'code', label: 'Window code', placeholder: 'e.g. W1, D1, V1 — your own code for this window', required: true }, { k: 'qty', label: 'Quantity', value: '1', type: 'number', required: true }], 'Open in designer →', 'The code stays on every window produced from this design; production tells them apart by location.')
     if (!f) return
-    const r = await api(`/quotations/${id}/items`, { method: 'POST', body: { mark: f.code.trim(), name: t ? t.name : 'Window', system: t ? t.system : '62 series sliding window', width: t ? t.w : 1200, height: t ? t.h : 1200, type: t ? t.type : 'sliding', qty: Math.max(1, +f.qty || 1), glass: '5 mm clear glass', thickness: '5 mm', mesh: t?.mesh || 'No mesh' } })
+    const r = await api(`/quotations/${id}/items`, { method: 'POST', body: { mark: f.code.trim(), name: t ? t.name : 'Window', system: t ? t.system : '62 series sliding window', width: t ? t.w : 1200, height: t ? t.h : 1200, type: t ? t.type : 'sliding', qty: Math.max(1, +f.qty || 1), glass: glassFor(t), thickness: glassFor(t).match(/\d+ mm/)[0], mesh: t?.mesh || 'No mesh' } })
     await api(`/quotations/${id}/items/${r.id}/design`, { method: 'PUT', body: { design: t ? t.d : { kind: 'sliding', panels: 2, mesh: 0 } } })
     nav(`/quotations/${id}/design/${r.id}`)
   }
