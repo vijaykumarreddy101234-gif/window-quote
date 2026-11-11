@@ -114,7 +114,7 @@ function compute(d, ctx) {
     // casement / vent / door / fixed: grid of cells
     const cols = d.cols && d.cols.length ? d.cols : [{ w: 1, rows: [{ h: 1, op: 'FIXED' }] }];
     const door = d.door;
-    const frameCode = door ? 'RSC-72OF' : (cols.every(c => c.rows.every(r => r.op === 'FIXED')) ? 'RSC-42VF' : 'RSC-60OF');
+    const frameCode = door ? 'RSC-72OF' : 'RSC-60OF';
     add('Frame', frameCode, [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
     let sashLens = [], beadLens = [], mullP = [], idx = 0, tm = 0;
@@ -134,7 +134,8 @@ function compute(d, ctx) {
           riM += ((sw + sh) * 2 - 400) / 1000;
           hardware += 190 + 3 * 243.54 + 1002; hw.push({ name: 'CASEMENT DOUBLE SIDE DOOR HANDLE · WHITE', qty: 1, rate: 190 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }, { name: 'CASEMENT DOOR ESPAG WITH CYLINDER 1800 · WHITE', qty: 1, rate: 1002 });
         } else if (opening) {
-          const sw = cw - 2 * FRAME_FACE + 2 * OVERLAP, sh = ch - 2 * FRAME_FACE + 2 * OVERLAP;
+          // leaf width as demo: column width less 32 mm at a frame edge and 9 mm at a mullion (single leaf 536, outer 559, centre 582 before +6)
+          const sw = W * c.w / totalW - (ci === 0 ? 32 : 9) - (ci === cols.length - 1 ? 32 : 9), sh = ch - 2 * FRAME_FACE + 2 * OVERLAP;
           sashLens.push(sw + 2 * w, sw + 2 * w, sh + 2 * w, sh + 2 * w);
           // daylight as the demo measures it: 90 mm off at a jamb (frame + sash + bead), 67 mm off at a mullion (sash hung 28 mm over the mullion)
           const colW = W * c.w / totalW, gw = Math.round(colW - (ci === 0 ? 90 : 67) - (ci === cols.length - 1 ? 90 : 67)), gh = sh - 2 * SASH_FACE;
@@ -146,7 +147,7 @@ function compute(d, ctx) {
           else if (door) { hardware += 1390 + 3 * 243.54; hw.push({ name: 'CMT DOOR LOCKING SET · WHITE', qty: 1, rate: 1390 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }); }
         } else {
           const gw = cw - 2 * FRAME_FACE + 20, gh = ch - 2 * FRAME_FACE + 20;
-          if (r.op === 'FIXED') { beadLens.push(gw - 4, gw - 4, gh - 4, gh - 4); glassPanes.push({ name: 'C' + idx, w: gw, h: gh }); }
+          if (r.op === 'FIXED') { const fw = cw - 2 * FRAME_FACE, fh = ch - 2 * FRAME_FACE; beadLens.push(fw, fw, fh, fh); glassPanes.push({ name: 'C' + idx, w: fw, h: fh }); }
           else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); }
           else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); }
         }
@@ -157,7 +158,7 @@ function compute(d, ctx) {
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
-    if (beadLens.length) add('Bead', door || sashLens.length ? 'RSB-35CB' : 'RSB-24.5SB', groupLens(beadLens), { grouped: true });
+    if (beadLens.length) add('Bead', 'RSB-35CB', groupLens(beadLens), { grouped: true });
     if (d.shape && d.shape !== 'rect') { const f = cuts.find(c => c.role === 'Frame'); if (f) { f.kg *= 1.3; f.metres *= 1.3; notes.push('Arc: profile and bead arc length + 30% bending wastage'); } }
     riM = Math.max(0, riM + (cuts.filter(c => c.role === 'Frame').reduce((a, c) => a + c.metres - 0.1 * c.lens.length, 0)));
   }
