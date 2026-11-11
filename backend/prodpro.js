@@ -11,15 +11,17 @@ CREATE TABLE IF NOT EXISTS bar_plans (id TEXT PRIMARY KEY, swo_id TEXT, name TEX
   function pieces(S) {
     const ents = db.prepare('SELECT e.*, i.mark, i.width, i.height FROM swo_items e JOIN quotation_items i ON i.id=e.item_id WHERE e.swo_id=? ORDER BY i.position, e.created_at').all(S.sw.id), qe = quoteEntries(S.q.id), out = [];
     ents.forEach(en => { const x = qe.find(k => k.it.id === en.item_id); if (!x) return; const win = `${en.mark}${en.location ? '/' + en.location : ''} (${en.width} x ${en.height} mm)`;
-      (x.e.cuts || []).forEach(c => (c.lens || []).forEach((len, i) => out.push({ wo: S.sw.number, code: c.code, name: c.name, role: c.role || '', member: `${c.code} / ${c.role || 'Member'}`, customer: S.c.name || '', win, mark: en.mark, len: Math.round(len), ref: `${en.id.slice(0, 4)}-${c.code}-${i + 1}` }))) });
+      (x.e.cuts || []).forEach(c => (c.lens || []).forEach((len, i) => { const four = (c.lens || []).length % 4 === 0 && /Frame|Sash|Bead|Outer/i.test(c.role || ''), k = i % 4, pos = four ? `${['Top', 'Bottom', 'Left', 'Right'][k]} ${String(c.role || '').toLowerCase()} · ${k < 2 ? 'Width' : 'Height'}` : (c.role || 'Member'); out.push({ wo: S.sw.number, code: c.code, name: c.name, role: c.role || '', member: `${c.code} / ${pos}`, customer: S.c.name || '', win, mark: en.mark, len: Math.round(len), ref: `${en.id.slice(0, 4)}-${c.code}-${i + 1}` }) })) });
     return out;
   }
+  const barMap = (sid, pid) => { const m = {}; if (!pid) return m; const r = db.prepare('SELECT plan FROM bar_plans WHERE id=? AND swo_id=?').get(pid, sid); if (r) JSON.parse(r.plan).bars.forEach((b, i) => b.cuts.forEach(c => { m[c.ref] = `Bar ${i + 1} · ${b.source === 'Measured offcut' ? 'offcut' : b.len + ' mm'}` })); return m };
+  const withBar = (list, m) => list.map(p => ({ ...p, bar: m[p.ref] || '' }));
   // ---------- labels ----------
   const FORMATS = { a4: { name: 'A4 · 80 × 45 mm · 12 labels', w: 80, h: 45, page: [210, 297], cols: 2, rows: 6, note: '80 × 45 mm · 12 labels per A4 sheet' }, thermal1: { name: 'Thermal · one across', w: 55, h: 27.94, page: [55, 27.94], cols: 1, rows: 1, note: '55 × 27.94 mm · 1 label per page' }, thermal2: { name: 'Thermal · two across', w: 55, h: 27.94, page: [110, 27.94], cols: 2, rows: 1, note: '110 × 27.94 mm · 2 labels per page' } };
   const BATCH = 24;
   api.get('/production/subs/:sid/labels', (req, res) => {
     const S = sub(req.params.sid); if (!S) return res.status(404).end(); const all = pieces(S), batch = Math.max(1, +req.query.batch || 1), scope = req.query.scope || 'all', win = req.query.win || '';
-    let list = all; if (win) list = list.filter(p => p.mark === win);
+    let list = withBar(all, barMap(req.params.sid, req.query.plan)); if (win) list = list.filter(p => p.mark === win);
     const total = list.length, from = (batch - 1) * BATCH; res.json({ total, batch, batches: Math.max(1, Math.ceil(total / BATCH)), from: total ? from + 1 : 0, to: Math.min(total, from + BATCH), labels: list.slice(from, from + BATCH), marks: [...new Set(all.map(p => p.mark))], formats: Object.entries(FORMATS).map(([k, v]) => ({ key: k, name: v.name, note: v.note })), scope });
   });
   function labelPdf(S, list, fmtKey) {
@@ -29,13 +31,13 @@ CREATE TABLE IF NOT EXISTS bar_plans (id TEXT PRIMARY KEY, swo_id TEXT, name TEX
       d.save().lineWidth(.4).strokeColor('#999').rect(x + 1, y + 1, w - 2, h - 2).stroke().restore();
       d.font('Helvetica-Bold').fontSize(big ? 8 : 5.5).fillColor('#000').text(p.wo, x + 6, y + 5, { width: w - 12, lineBreak: false });
       d.font('Helvetica-Bold').fontSize(big ? 10 : 7).text(p.member, x + 6, y + (big ? 17 : 12), { width: w - 12, lineBreak: false });
-      d.font('Helvetica').fontSize(big ? 8 : 5.5).text(p.customer, x + 6, y + (big ? 31 : 20), { width: w - 12, lineBreak: false }).text(p.win, x + 6, y + (big ? 42 : 26), { width: w - 12, lineBreak: false }).text(p.name, x + 6, y + (big ? 53 : 32), { width: w - 12, lineBreak: false });
+      d.font('Helvetica').fontSize(big ? 8 : 5.5).text(p.customer, x + 6, y + (big ? 31 : 20), { width: w - 12, lineBreak: false }).text(p.win, x + 6, y + (big ? 42 : 26), { width: w - 12, lineBreak: false }).text(p.name + (p.bar ? '  ·  ' + p.bar : ''), x + 6, y + (big ? 53 : 32), { width: w - 12, lineBreak: false });
       d.font('Helvetica-Bold').fontSize(big ? 13 : 8).text(`Size - ${p.len} mm`, x + 6, y + h - (big ? 28 : 15), { width: w - 12, lineBreak: false }) });
     if (!list.length) { d.addPage(); d.fontSize(10).text('No labels', 20, 20) }
     d.end(); return done;
   }
   api.post('/production/subs/:sid/labels.pdf', async (req, res) => {
-    const S = sub(req.params.sid); if (!S) return res.status(404).end(); const all = pieces(S), { batch, format, all: every } = req.body || {};
+    const S = sub(req.params.sid); if (!S) return res.status(404).end(); const { batch, format, all: every, plan: pl } = req.body || {}, all = withBar(pieces(S), barMap(req.params.sid, pl));
     const list = every ? all : all.slice(((+batch || 1) - 1) * BATCH, (+batch || 1) * BATCH);
     try { send(res, await labelPdf(S, list, format), 'application/pdf', `${S.sw.number}-labels${every ? '-all' : '-batch-' + (+batch || 1)}.pdf`) } catch (e) { res.status(500).json({ error: e.message }) }
   });

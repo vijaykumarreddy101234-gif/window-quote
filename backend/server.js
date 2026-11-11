@@ -607,12 +607,26 @@ api.get('/production/subs/:sid/stock', (req, res) => {
   const rows = D.hwLines.filter(h => h.w.length).map(h => { const m = hwMeta(h.name.replace(/\s*\[.*\]$/, '')) || {}; const present = +m.stock || 0; return { id: m.id || null, name: h.name.replace(/\s*\[.*\]$/, ''), code: m.code || '', unit: h.unit || 'pc', required: +h.qty.toFixed(3), present, balance: Math.max(0, +(h.qty - present).toFixed(3)), group: /SCREW|CAP|PACKER|GASKET|SEAL|FASTNER|SILICON/i.test(h.name) ? 'Accessories and Installation Material' : (m.brand || 'Generic Hardware') } });
   res.json({ rows, required: rows.length, supplied: rows.filter(r => r.present >= r.required).length, toProcure: rows.filter(r => r.balance > 0).length, complete: sw.status === 'dispatched' || ['production_complete'].includes(sw.status) });
 });
-const prodTables = (ents, q) => {
+const GROUPS = { 'Block': e => (String(e.location || '').split('/')[0].trim() || '-'), 'Flat (within block)': e => (String(e.location || '').trim() || '-'), 'Similar windows': e => `${e.type || 'Window'} · ${e.width} x ${e.height}` };
+// QC / supply / area registers, optionally grouped (Block, Flat, Similar windows) like the demo's "Group by" switch
+function regRows(kind, ents, g, withSub) {
+  const key = GROUPS[g], sq = e => +(e.width * e.height / 92903.04).toFixed(2), loc = e => e.location || '-';
+  const sorted = key ? [...ents].sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true })) : ents, out = []; let last = null, n = 0;
+  const width = { qc: withSub ? 8 : 7, supply: 6, area: 5 }[kind];
+  const head = k => out.push([`▸ ${g}: ${k}`, ...Array(width - 1).fill('')]);
+  if (kind === 'area') { const by = {}; sorted.forEach(e => { const k = key ? key(e) : ''; const r = (by[k] = by[k] || {})[e.mark] = (by[k] || {})[e.mark] || [e.mark, e.name, 0, sq(e), 0]; r[2]++; r[4] = +(r[4] + sq(e)).toFixed(2) });
+    Object.keys(by).forEach(k => { if (key) head(k); Object.values(by[k]).forEach(r => out.push(r)); if (key) out.push(['Subtotal', '', Object.values(by[k]).reduce((a, r) => a + r[2], 0), '', +Object.values(by[k]).reduce((a, r) => a + r[4], 0).toFixed(2)]) }); return out }
+  sorted.forEach(e => { const k = key ? key(e) : null; if (key && k !== last) { head(k); last = k } n++;
+    if (kind === 'qc') out.push(withSub ? [n, e.mark + ' ' + e.name, loc(e), `${e.width} x ${e.height}`, `${e.glass} ${e.thickness}`, e.stage, (e.sub || '').slice(-2), e.qc ? 'Passed' : '[  ]'] : [n, e.mark + ' ' + e.name, loc(e), `${e.width} x ${e.height}`, `${e.glass} ${e.thickness}`, e.stage, e.qc ? 'Passed' : '☐']);
+    else out.push([n, e.mark, e.type, `${e.width} x ${e.height}`, `${e.system} / ${e.glass}`, loc(e)]) });
+  return out;
+}
+const prodTables = (ents, q, g) => {
   const cnt = {}; ents.forEach(e => { cnt[e.item_id] = (cnt[e.item_id] || 0) + 1 });
   const qe = quoteEntries(q.id).filter(x => cnt[x.it.id]).map(x => ({ ...x, it: { ...x.it, qty: cnt[x.it.id] } }));
   const D = qcalc.report(qe, prcQ(q.id), getComm(q.id), quoteTotals(q.id), { hw: hwMeta, glass: glassMeta }), M = D.mat, f2 = v => (+v || 0).toFixed(2);
   const sq = e => +(e.width * e.height / 92903.04).toFixed(2), loc = e => e.location || '-';
-  return [
+  const T = [
     ['Glass cutting list', ['Glass', 'Size (mm)', 'Qty', 'Area (sq ft)', 'Windows'], M.glassReq.flatMap(k => Object.values(k.sizes).sort((a, b) => b.w * b.h - a.w * a.h).map(z => [k.spec, `${z.w} x ${z.h}`, z.qty, f2(z.w * z.h / 92903.04 * z.qty), [...new Set(z.win || [])].join(', ')])).concat(M.glassReq.map(k => [k.spec + ' — total', '', k.pieces, f2(k.sqft), '']))],
     ['Profile cutting list', ['Code', 'Profile', 'Pieces', 'Length (m)', 'Bars', 'Windows'], M.bars.map(b => [b.code, b.name, b.pieces, f2(b.m), b.bars, ((D.profileLines.find(x => x.code === b.code) || {}).w || []).join(', ')])],
     ['Reinforcement cutting list', ['Host profile', 'Thickness (mm)', 'Pieces', 'Length (m)', 'Bars'], M.riBars.map(b => [b.host, b.thk, b.pieces, f2(b.m), b.bars])],
@@ -623,6 +637,8 @@ const prodTables = (ents, q) => {
     ['Window supply schedule', ['No.', 'Code', 'Type', 'Outer frame (mm)', 'Specification', 'Location'], ents.map((e, k) => [k + 1, e.mark, e.type, `${e.width} x ${e.height}`, `${e.system} / ${e.glass}`, loc(e)])],
     ['Window area report', ['Window', 'Description', 'Qty', 'Area each (sq ft)', 'Total area (sq ft)'], Object.values(ents.reduce((a, e) => { const r = a[e.mark] = a[e.mark] || [e.mark, e.name, 0, sq(e), 0]; r[2]++; r[4] = +(r[4] + sq(e)).toFixed(2); return a }, {}))]
   ];
+  if (g && GROUPS[g]) { T[5][2] = regRows('qc', ents, g, false); T[7][2] = regRows('supply', ents, g); T[8][2] = regRows('area', ents, g) }
+  return T;
 };
 api.get('/production/subs/:sid/docs/:n', async (req, res) => {
   const sw = db.prepare('SELECT * FROM sub_work_orders WHERE id=?').get(req.params.sid); if (!sw) return res.status(404).end();
@@ -630,8 +646,8 @@ api.get('/production/subs/:sid/docs/:n', async (req, res) => {
   const n = Math.min(9, Math.max(1, +req.params.n || 1)), fmt = ['pdf', 'xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf';
   try {
     const ents = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type FROM swo_items e JOIN quotation_items i ON i.id=e.item_id WHERE e.swo_id=? ORDER BY i.position, e.created_at').all(sw.id);
-    if (n === 5) return send(res, await docs.multi(fmt, 'Complete production document', sw.number, prodTables(ents, q).filter((_, i) => i !== 4)), MIME[fmt], `${sw.number}-complete-production-document.${fmt}`);
-    const [title, head, rows] = prodTables(ents, q)[n - 1];
+    if (n === 5) return send(res, await docs.multi(fmt, 'Complete production document', sw.number, prodTables(ents, q, req.query.group).filter((_, i) => i !== 4)), MIME[fmt], `${sw.number}-complete-production-document.${fmt}`);
+    const [title, head, rows] = prodTables(ents, q, req.query.group)[n - 1];
     send(res, await docs.table(fmt, title, head, rows.length ? rows : [['No entries', ...head.slice(1).map(() => '')]], sw.number), MIME[fmt], `${sw.number}-${title.replace(/\s+/g, '-').toLowerCase()}.${fmt}`);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -640,7 +656,7 @@ api.get('/production/:id/docs/:n', async (req, res) => {
   const n = +req.params.n || 1, fmt = ['pdf', 'xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf';
   if (n === 4) { try { const q = db.prepare('SELECT * FROM quotations WHERE id=?').get(w.quotation_id), all = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type FROM swo_items e JOIN quotation_items i ON i.id=e.item_id JOIN sub_work_orders s ON s.id=e.swo_id WHERE s.wo_id=? ORDER BY i.position, e.created_at').all(w.id);
     if (!all.length) return res.status(409).json({ error: 'Work order has no saved items' });
-    return send(res, await docs.multi(fmt, 'Complete production document', w.number, prodTables(all, q).filter((_, i) => i !== 4)), MIME[fmt], `${w.number}-complete-production-document.${fmt}`); } catch (e) { return res.status(500).json({ error: e.message }) } }
+    return send(res, await docs.multi(fmt, 'Complete production document', w.number, prodTables(all, q, req.query.group).filter((_, i) => i !== 4)), MIME[fmt], `${w.number}-complete-production-document.${fmt}`); } catch (e) { return res.status(500).json({ error: e.message }) } }
   const ents = db.prepare('SELECT e.*, i.mark, i.name, i.width, i.height, i.glass, i.thickness, i.system, i.type, s.number AS sub FROM swo_items e JOIN quotation_items i ON i.id=e.item_id JOIN sub_work_orders s ON s.id=e.swo_id WHERE s.wo_id=? ORDER BY i.position, e.created_at').all(w.id);
   const sq = e => +(e.width * e.height / 92903.04).toFixed(2);
   const T = [
@@ -648,7 +664,7 @@ api.get('/production/:id/docs/:n', async (req, res) => {
     ['Window supply schedule', ['No.', 'Code', 'Type', 'Outer frame (mm)', 'Specification', 'Location'], ents.map((e, k) => [k + 1, e.mark, e.type, `${e.width} x ${e.height}`, `${e.system} / ${e.glass}`, e.location || '-'])],
     ['Window area report', ['Window', 'Description', 'Qty', 'Area each (sq ft)', 'Total area (sq ft)'], Object.values(ents.reduce((a, e) => { const r = a[e.mark] = a[e.mark] || [e.mark, e.name, 0, sq(e), 0]; r[2]++; r[4] = +(r[4] + sq(e)).toFixed(2); return a }, {}))],
   ][Math.min(2, Math.max(0, n - 1))];
-  const [title, head, rows] = T, fname = `${w.number}-${title.replace(/\s+/g, '-').toLowerCase()}`;
+  const [title, head] = T, g = req.query.group, rows = g && GROUPS[g] ? regRows(['qc', 'supply', 'area'][Math.min(2, Math.max(0, n - 1))], ents, g, true) : T[2], fname = `${w.number}-${title.replace(/\s+/g, '-').toLowerCase()}`;
   try { send(res, await docs.table(fmt, title, head, rows, w.number), MIME[fmt], `${fname}.${fmt}`); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 require('./prodpro')(api, db, { quoteEntries, docs, uid, now, send, MIME });
