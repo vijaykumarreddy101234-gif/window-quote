@@ -50,13 +50,17 @@ module.exports = function persist(db, { url, token, tmp = '/tmp' }) {
     const owner = 'init' + Math.random().toString(36).slice(2); if (!(await lock(owner))) throw new Error('init lock timeout');
     try { const v2 = await remoteVersion(); if (v2 > 0) await pull(v2); else await push(); console.log('persist: ready, version', localV) } finally { await unlock(owner) }
   })().catch(e => { ready = null; throw e }));
+  let offUntil = 0;
   return async function middleware(req, res, next) {
+    if (Date.now() < offUntil) return next();
     const write = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS', owner = Math.random().toString(36).slice(2) + Date.now();
     try {
       await init();
       if (write && !(await lock(owner))) return res.status(503).json({ error: 'Server busy, please retry.' });
       const v = await remoteVersion(); if (v > localV) await pull(v);
-    } catch (e) { console.error('persist pull failed:', e.message); if (write) { unlock(owner); return res.status(503).json({ error: 'Storage unavailable, please retry.' }) } }
+    } catch (e) { console.error('persist pull failed:', e.message);
+      if (/turso http (400|401|403)/.test(e.message)) { offUntil = Date.now() + 60000; console.error('PERSISTENCE DISABLED for 60s: Turso rejected the credentials - check TURSO_AUTH_TOKEN in Vercel'); if (write) unlock(owner); return next() }
+      if (write) { unlock(owner); return res.status(503).json({ error: 'Storage unavailable, please retry.' }) } }
     if (write) {
       const end = res.end.bind(res); let called = false;
       res.once('close', () => { if (!called) unlock(owner) });
