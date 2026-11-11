@@ -114,6 +114,7 @@ function compute(d, ctx) {
     // casement / vent / door / fixed: grid of cells
     const cols = d.cols && d.cols.length ? d.cols : [{ w: 1, rows: [{ h: 1, op: 'FIXED' }] }];
     const door = d.door;
+    const sidelightDoor = !!door && cols.length > 1 && cols.some(x => x.rows.every(r => r.op === 'FIXED')); // door + side light (demo: Z mullion, 2 mm mullion-side leaf, side light 523 x 1996)
     const frameCode = door ? 'RSC-72OF' : 'RSC-60OF';
     add('Frame', frameCode, [W + 2 * w, W + 2 * w, H + 2 * w, H + 2 * w]);
     const totalW = cols.reduce((a, c) => a + c.w, 0);
@@ -122,7 +123,7 @@ function compute(d, ctx) {
     const doCols = (cols, H, totalW) => cols.forEach((c, ci) => {
       const cw = (W - 2 * FRAME_FACE) * c.w / totalW + 2 * FRAME_FACE - (ci > 0 ? 0 : 0);
       const th = c.rows.reduce((a, r) => a + r.h, 0);
-      if (ci > 0) mullP.push(door ? H - 88 : H - FRAME_FACE + (band ? 0 : 0)); // door: fly mullion RSC-60FM as demo
+      if (ci > 0) mullP.push(door ? (sidelightDoor ? H - 60 : H - 88) : H - FRAME_FACE + (band ? 0 : 0)); // door: fly mullion RSC-60FM (H-88), Z mullion RSC-74ZM (H-60) beside a side light, as demo
       c.rows.forEach((r, ri) => {
         const ch = (H - 2 * FRAME_FACE) * r.h / th + 2 * FRAME_FACE;
         if (ri > 0) tm += cw - 2 * FRAME_FACE;
@@ -130,7 +131,7 @@ function compute(d, ctx) {
         const opening = r.op !== 'FIXED' && r.op !== 'LOUVRE' && r.op !== 'FAN';
         if (opening && door) {
           // door leaf: column less 41 mm at each frame edge (fly mullion adds nothing), as demo: single 818, double 859
-          const sw = W * c.w / totalW - (ci === 0 ? 41 : 0) - (ci === cols.length - 1 ? 41 : 0), sh = ch - 82, gw = sw - 174, gh = sh - 174;
+          const sw = W * c.w / totalW - (ci === 0 ? 41 : 0) - (ci === cols.length - 1 ? 41 : 0) - (sidelightDoor ? 2 : 0), sh = ch - 82, gw = sw - 174, gh = sh - 174;
           sashLens.push(sw, sw, sh, sh); beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: 'C' + idx, w: gw, h: gh });
           riM += ((sw + sh) * 2 - 400) / 1000;
           hardware += 190 + 3 * 243.54 + 1002; hw.push({ name: 'CASEMENT DOUBLE SIDE DOOR HANDLE · WHITE', qty: 1, rate: 190 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }, { name: 'CASEMENT DOOR ESPAG WITH CYLINDER 1800 · WHITE', qty: 1, rate: 1002 });
@@ -148,7 +149,12 @@ function compute(d, ctx) {
           else if (door) { hardware += 1390 + 3 * 243.54; hw.push({ name: 'CMT DOOR LOCKING SET · WHITE', qty: 1, rate: 1390 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }); }
         } else {
           const gw = cw - 2 * FRAME_FACE + 20, gh = ch - 2 * FRAME_FACE + 20;
-          if (r.op === 'FIXED') { const fw = cw - 2 * FRAME_FACE, fh = ch - 2 * FRAME_FACE; beadLens.push(fw, fw, fh, fh); glassPanes.push({ name: 'C' + idx, w: fw, h: fh }); }
+          if (r.op === 'FIXED') {
+            // side light beside a door: column less 41 (frame) / 36 (mullion), height H-104; window fixed: column less 40 each side
+            const fw = sidelightDoor ? W * c.w / totalW - (ci === 0 ? 41 : 36) - (ci === cols.length - 1 ? 41 : 36) : cw - 2 * FRAME_FACE;
+            const fh = sidelightDoor ? H - 104 : ch - 2 * FRAME_FACE;
+            beadLens.push(fw, fw, fh, fh); glassPanes.push({ name: 'C' + idx, w: fw, h: fh });
+          }
           else if (r.op === 'LOUVRE') { const bl = Math.max(3, Math.round(gh / 60)); hardware += bl * 15; hw.push({ name: `${bl} BLADE MOVABLE LOUVER · WHITE`, qty: 1, rate: bl * 15 }); }
           else if (r.op === 'FAN') { hardware += 350; hw.push({ name: 'EXHAUST FAN', qty: 1, rate: 350 }); }
         }
@@ -157,7 +163,7 @@ function compute(d, ctx) {
     doCols(cols, Hmain, totalW)
     if (band) { tm += W - 2 * FRAME_FACE; doCols([{ w: 1, rows: [{ h: 1, op: band.op }] }], H * band.h, 1) }
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
-    if (mullP.length) add('Mullion', door ? 'RSC-60FM' : 'RSC-74TM', mullP);
+    if (mullP.length) add('Mullion', door ? (sidelightDoor ? 'RSC-74ZM' : 'RSC-60FM') : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
     if (beadLens.length) add('Bead', 'RSB-35CB', groupLens(beadLens), { grouped: true });
     if (d.shape && d.shape !== 'rect') { const f = cuts.find(c => c.role === 'Frame'); if (f) { f.kg *= 1.3; f.metres *= 1.3; notes.push('Arc: profile and bead arc length + 30% bending wastage'); } }

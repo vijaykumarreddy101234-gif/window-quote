@@ -35,7 +35,7 @@ export const TEMPLATES = [
   t('k3', G.CW, 'Casement + fixed + casement', 'combination', 2100, 1200, '60 series combination window', cs([C(R('LH')), C(R('FIXED'), 1.2), C(R('RH'))])),
   t('od1', G.CD, 'Single open door', 'casement', 900, 2100, '60 series casement door', cs(one('LH'), { door: true })),
   t('od2', G.CD, 'Double open door', 'casement', 1800, 2100, '60 series casement door', cs([C(R('LH')), C(R('RH'))], { door: true })),
-  t('od3', G.CD, 'Door + side light', 'casement', 1300, 2100, '60 series casement door', cs([C(R('LH')), C(R('FIXED'), .5)], { door: true })),
+  t('od3', G.CD, 'Door + side light', 'casement', 1800, 2100, '60 series casement door', cs([C(R('LH')), C(R('FIXED'), .5)], { door: true })),
   t('odf', G.CD, 'Door with fixed top', 'casement', 900, 2400, '60 series casement door', cs([C([R('FIXED', .25), R('RH', .75)])], { door: true })),
   t('v1', G.V, 'Top-hung', 'combination', 600, 450, '60 series ventilator', cs(one('TOP'))),
   t('v2', G.V, 'Louvre', 'combination', 600, 600, '60 series ventilator', cs(one('LOUVRE'))),
