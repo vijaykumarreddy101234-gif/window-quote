@@ -46,7 +46,7 @@ const now = () => new Date().toISOString();
 
 // ---- seed ----
 if (!db.prepare('SELECT 1 FROM users LIMIT 1').get()) {
-  db.prepare('INSERT INTO users (id,name,email,password,role) VALUES (?,?,?,?,?)').run(uid(), 'Ravinder Reddy', 'admin@fenstraworks.local', 'admin123', 'owner');
+  db.prepare('INSERT INTO users (id,name,email,password,role) VALUES (?,?,?,?,?)').run(uid(), 'Vijay Kumar Reddy', 'vijaykumarreddy101234@gmail.com', 'fenestra123', 'owner');
   const setS = db.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)');
   setS.run('intro', '');
   setS.run('terms', '1. Specification: Manufacturing follows the profile system, glass, and hardware specified in this document.');
