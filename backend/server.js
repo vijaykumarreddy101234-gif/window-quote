@@ -501,17 +501,26 @@ const trackData = q => {
 api.get('/quotations/:id/tracking', (req, res) => { const q = db.prepare('SELECT * FROM quotations WHERE id=?').get(req.params.id); if (!q) return res.status(404).json({ error: 'Not found' }); res.json(trackData(q)); });
 api.get('/quotations/:id/doc/:kind', async (req, res) => {
   const q = db.prepare('SELECT * FROM quotations WHERE id=?').get(req.params.id); if (!q) return res.status(404).end();
-  const fmt = ['xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf', kind = req.params.kind, cust = db.prepare('SELECT * FROM customers WHERE id=?').get(q.customer_id) || {};
+  const fmt = ['xlsx', 'docx'].includes(req.query.format) ? req.query.format : 'pdf'; let kind = req.params.kind; const cust0 = 0, cust = db.prepare('SELECT * FROM customers WHERE id=?').get(q.customer_id) || {};
   try {
     const c = docCtx(q, cust), ents = quoteEntries(q.id), tot = quoteTotals(q.id), D = qcalc.report(ents, prcQ(q.id), getComm(q.id), tot, { hw: hwMeta, glass: glassMeta });
     if (kind === 'elevation') { const items = ents.map(({ it }) => ({ mark: it.mark, name: it.name, w: it.width, h: it.height, qty: it.qty, glass: it.glass, hasMesh: it.mesh && it.mesh !== 'No mesh', finish: it.finish, location: it.location, d: it.d }));
       return send(res, await docs.elevationPdf(c, items, D.notes), MIME.pdf, q.number + '-elevation.pdf'); }
+    if (kind === 'shopdrawing' && req.query.format === 'dxf') { const { buildDxf } = await import('./dxf.mjs'); let oy = 0, head = null, tail = null, body = [];
+      for (const { it } of ents) { const d = it.d && it.d.kind ? it.d : { kind: 'sliding', panels: 2 };
+        const L = buildDxf({ mark: it.mark, name: it.name, width: it.width, height: it.height, design: d, glass: it.glass }).split('\n'), a = L.findIndex((x, i) => x.trim() === 'ENTITIES' && L[i - 1] && L[i - 1].trim() === '2'), b = L.lastIndexOf('ENDSEC') >= 0 ? L.lastIndexOf('ENDSEC') : L.length;
+        if (a < 0) continue; if (!head) { head = L.slice(0, a + 1); tail = L.slice(b - 1) }
+        const seg = L.slice(a + 1, b - 1); for (let i = 0; i + 1 < seg.length; i += 2) if (['20', '21'].includes(seg[i].trim())) seg[i + 1] = String(+seg[i + 1] + oy); body.push(...seg); oy -= (+it.height + 800) }
+      return send(res, Buffer.from([...(head || []), ...body, ...(tail || [])].join('\n')), 'application/dxf', `${q.number}-shop-drawing.dxf`); }
+    if (kind === 'shopdrawing') kind = 'elevation';
     if (kind === 'tracking') return send(res, await docs.reportDoc('tracking', 'pdf', c, trackData(q)), MIME.pdf, `${q.number}-tracking.pdf`);
     if (kind === 'costing' || kind === 'materials') return send(res, await docs.reportDoc(kind, fmt, c, D), MIME[fmt], `${q.number}-${kind}.${fmt}`);
     res.status(404).json({ error: 'Unknown document' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+require('./crm')(api, db, { uid, now, quoteTotals });
 
 // production — work orders, sub work orders, shop-floor entries
 db.exec(`CREATE TABLE IF NOT EXISTS sub_work_orders (id TEXT PRIMARY KEY, wo_id TEXT, number TEXT, notes TEXT DEFAULT '', status TEXT DEFAULT 'draft', created_at TEXT);

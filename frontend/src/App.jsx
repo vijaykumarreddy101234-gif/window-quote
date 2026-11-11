@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CRM from './pages/CRM'
 import { Routes, Route, Navigate, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { api, token } from './api'
 import { Icon } from './Icons'
@@ -33,7 +34,7 @@ function Layout({ children }) {
   const nav = useNavigate()
   useEffect(() => { api('/auth/me').then(setMe).catch(() => {}) }, [])
   const loc = useLocation(); const [menu, setMenu] = useState(false); const [chat, setChat] = useState(false)
-  const NAV = [['/dashboard', 'Dashboard'], ['/quotations', 'Quotations'], ['/production', 'Production'], ['/invoices', 'Invoices'], ['/inventory', 'Inventory'], ['/settings', 'Settings']]
+  const NAV = [['/dashboard', 'Dashboard'], ['/crm', 'CRM'], ['/quotations', 'Quotations'], ['/production', 'Production'], ['/invoices', 'Invoices'], ['/inventory', 'Inventory'], ['/settings', 'Settings']]
   const cur = (NAV.find(n => loc.pathname.startsWith(n[0])) || NAV[1])[1]
   const designer = /\/design\//.test(loc.pathname)
   const [hideSetup, setHideSetup] = useState(() => !!localStorage.getItem('fw_hide_setup'))
@@ -50,7 +51,7 @@ function Layout({ children }) {
       <header className="topbar app-header">
         <NavLink to="/dashboard" className="brand-link"><img className="app-brand-logo" src="/brand/raviraja-logo.png" alt="Raviraja Industries" /></NavLink>
         <nav className="topnav">
-          {[['/dashboard', 'Dashboard', 'dashboard'], ['/quotations', 'Quotations', 'quotations'], ['/production', 'Production', 'production'], ['/invoices', 'Invoices', 'invoices'], ['/settings', 'Settings', 'settings']].map(([to, l, ic]) => <NavLink key={to} to={to} className="app-nav-link"><Icon n={ic} />{l}</NavLink>)}
+          {[['/dashboard', 'Dashboard', 'dashboard'], ['/crm', 'CRM', 'invoices'], ['/quotations', 'Quotations', 'quotations'], ['/production', 'Production', 'production'], ['/invoices', 'Invoices', 'invoices'], ['/settings', 'Settings', 'settings']].map(([to, l, ic]) => <NavLink key={to} to={to} className="app-nav-link"><Icon n={ic} />{l}</NavLink>)}
         </nav>
         <div className="hright">
           <NavLink to="/getting-started" className="gs-pill"><span className="gs-ring" />Setup 7 of 10</NavLink>
@@ -76,6 +77,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/dashboard" element={<Guard><Dashboard /></Guard>} />
+      <Route path="/crm" element={<Guard><CRM /></Guard>} />
       <Route path="/quotations" element={<Guard><Quotations /></Guard>} />
       <Route path="/quotations/:id" element={<Guard><QuotationDetail /></Guard>} />
       <Route path="/quotations/:id/new-window" element={<Guard><NewWindow /></Guard>} />
