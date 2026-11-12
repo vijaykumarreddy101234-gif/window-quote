@@ -29,10 +29,10 @@ module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret
     } finally { db.exec('DETACH DATABASE rm'); try { fs.unlinkSync(f) } catch (e) {} }
     localV = vOf(b);
   }
-  async function push() {
+  async function push(known) {
     const f = tmp + '/save-' + process.pid + '-' + Date.now() + '.db'; db.exec(`VACUUM INTO '${f}'`);
     const body = enc(zlib.gzipSync(fs.readFileSync(f))); fs.unlinkSync(f);
-    const bs = await list(P + 'snap/'), v = Math.max(localV, ...bs.map(vOf)) + 1;
+    const bs = known || await list(P + 'snap/'), v = Math.max(localV, ...bs.map(vOf)) + 1;
     await put(P + 'snap/v' + v + '.bin', body); localV = v;
     const old = bs.filter(b => vOf(b) < v - 1).map(b => b.url); if (old.length) del(old); // prune older snapshots (not awaited)
   }
@@ -42,24 +42,26 @@ module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret
   async function lock(owner) {
     const mine = Date.now(); tickets.set(owner, await put(tk(mine + '-' + owner), Buffer.from('1')));
     for (let i = 0; i < 80; i++) {
-      const all = (await list(P + 'lock/')).map(b => ({ b, t: +(b.pathname.split('/').pop().split('-')[0] || 0) })), stale = all.filter(x => x.t < Date.now() - 25000).map(x => x.b.url);
+      const every = await list(P), snaps = every.filter(b => b.pathname.startsWith(P + 'snap/'));
+      const all = every.filter(b => b.pathname.startsWith(P + 'lock/')).map(b => ({ b, t: +(b.pathname.split('/').pop().split('-')[0] || 0) })), stale = all.filter(x => x.t < Date.now() - 25000).map(x => x.b.url);
       if (stale.length) del(stale);
       const ts = all.filter(x => x.t >= Date.now() - 25000).sort((a, b) => a.t - b.t);
-      if (!ts.length || ts[0].b.pathname === tk(mine + '-' + owner)) return true;
+      if (!ts.length || ts[0].b.pathname === tk(mine + '-' + owner)) return snaps;
       await new Promise(r => setTimeout(r, 150 + Math.random() * 200));
     }
-    await unlock(owner); return false;
+    await unlock(owner); return null;
   }
   const unlock = async owner => { const u = tickets.get(owner); tickets.delete(owner); if (u) await del([u]) };
   const init = () => ready || (ready = (async () => { const b = await latest(); if (b) await pull(b); else await push(); console.log('persist(' + ns + '): ready, version', localV) })().catch(e => { ready = null; throw e }));
   let offUntil = 0;
   const mw = async function middleware(req, res, next) {
     if (Date.now() < offUntil) return next();
-    const write = !['GET', 'HEAD', 'OPTIONS'].includes(req.method), owner = Math.random().toString(36).slice(2) + Date.now();
+    const write = !['GET', 'HEAD', 'OPTIONS'].includes(req.method), owner = Math.random().toString(36).slice(2) + Date.now(); let snaps = null;
     try {
       await init();
-      if (write && !(await lock(owner))) return res.status(503).json({ error: 'Server busy, please retry.' });
-      const b = await latest(); if (b && vOf(b) > localV) await pull(b);
+      if (write) { snaps = await lock(owner); if (!snaps) return res.status(503).json({ error: 'Server busy, please retry.' }) }
+      let best = null; for (const b of (snaps || await list(P + 'snap/'))) if (vOf(b) > (best ? vOf(best) : 0)) best = b;
+      if (best && vOf(best) > localV) await pull(best);
     } catch (e) { console.error('persist pull failed:', e.message);
       if (/blob http (401|403)/.test(e.message)) { offUntil = Date.now() + 60000; console.error('PERSISTENCE DISABLED for 60s: Vercel Blob rejected the token'); if (write) unlock(owner); return next() }
       if (write) { unlock(owner); return res.status(503).json({ error: 'Storage unavailable, please retry.' }) } }
@@ -69,7 +71,7 @@ module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret
       res.end = function (...a) {
         if (called) return end(...a); called = true;
         if (res.statusCode >= 400) { unlock(owner); return end(...a) }
-        push().then(() => unlock(owner), e => { console.error('persist push failed:', e.message); unlock(owner); res.statusCode = 503; res.removeHeader('Content-Length'); res.setHeader('Content-Type', 'application/json'); a = [JSON.stringify({ error: 'Could not save your change, please retry.' })] }).finally(() => end(...a));
+        push(snaps).then(() => unlock(owner), e => { console.error('persist push failed:', e.message); unlock(owner); res.statusCode = 503; res.removeHeader('Content-Length'); res.setHeader('Content-Type', 'application/json'); a = [JSON.stringify({ error: 'Could not save your change, please retry.' })] }).finally(() => end(...a));
         return res;
       };
     }
