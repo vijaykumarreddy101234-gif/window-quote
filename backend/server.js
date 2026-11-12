@@ -320,9 +320,9 @@ api.post('/auth/signup', async (req, res) => {
     const co = (() => { try { return JSON.parse(T.db.prepare("SELECT value FROM settings WHERE key='company'").get().value) } catch (e) { return {} } })();
     T.db.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('company', JSON.stringify({ ...co, name: String(company).trim(), email: em }));
     rawDb.prepare('INSERT INTO accounts (tenant,email,company,plan,created_at) VALUES (?,?,?,?,?)').run(tid, em, String(company).trim(), 'trial', new Date().toISOString());
-    if (T.mw) await T.mw.pushNow();
+    if (T.mw) { try { await T.mw.pushNow() } catch (e) { if (!/turso http (400|401|403)/.test(e.message)) throw e; console.error('signup: persistence unavailable (check TURSO_AUTH_TOKEN)') } }
     res.json({ token: mkToken(uid0, tid), user: { id: uid0, name: String(name).trim(), email: em, role: 'admin' } });
-  } catch (e) { console.error('signup failed', e); res.status(500).json({ error: 'Could not create the account, please retry.' }) }
+  } catch (e) { console.error('signup failed', e); logErr('server', 'main', 'signup', e && e.message); res.status(500).json({ error: 'Could not create the account, please retry.' }) }
 });
 api.use((req, res, next) => {
   const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
