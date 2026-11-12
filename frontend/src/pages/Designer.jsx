@@ -138,7 +138,7 @@ export default function Designer() {
         </div>
       </div>
 
-      <div className="dz-float"><div className="mbases hide-m">Measurement bases: ordered overall frame · ordered pane partitions · daylight · glass cut{edit && mode === '2d' && <> · <b style={{ color: '#2563eb' }}>Drag the blue handles to move mullions</b></>}</div><div className="d-tools card">
+      <div className="dz-float"><div className="mbases hide-m">Measurement bases: ordered overall frame · ordered pane partitions · daylight · glass cut{edit && mode === '2d' && <> · <b style={{ color: '#2563eb' }}>Drag a divider line to move it</b></>}</div><div className="d-tools card">
         <button className="icon-btn" disabled={!hist.length} onClick={undo} aria-label="Undo">↶</button><button className="icon-btn" disabled={!fut.length} onClick={redo} aria-label="Redo">↷</button>
         <button className={'pill-btn' + (mode === '2d' ? ' solid' : '')} onClick={() => setMode('2d')}>▯ 2D</button>
         <button className={'pill-btn' + (mode === '3d' ? ' solid' : '')} onClick={() => setMode('3d')}>◈ 3D</button>

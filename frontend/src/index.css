@@ -629,3 +629,7 @@ body{background:#f0f2f5}
 
 .pp-piece{filter:drop-shadow(0 0 .7px #3b5f80)}.pp-mitre{height:34px;background:#e4edf5;clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 100%,0 100%)}
 .pp-piece .a{bottom:1px}.pp-piece b{filter:none}
+
+/* drag grips stay out of the way (so handles/locks stay visible) until the pointer is near them */
+.geom-grip { opacity: 0; transition: opacity .15s }
+.geom-grip:hover, .dz-canvas:active .geom-grip { opacity: 1 }
