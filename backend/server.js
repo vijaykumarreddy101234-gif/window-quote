@@ -12,7 +12,11 @@ if (process.env.VERCEL) { // serverless: writable disk is /tmp only; start from 
 }
 // Persistent database: when TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set (Vercel), use a Turso embedded replica
 // (reads are local, writes go to the shared primary), so data survives cold starts and is shared by every instance.
-const db = new Database(DBFILE); db.pragma('journal_mode = WAL');
+const rawDb = new Database(DBFILE); rawDb.pragma('journal_mode = WAL');
+// SaaS: every company (tenant) has its own private database file. `db` below always points at the current request's
+// company (via AsyncLocalStorage) and falls back to the main/demo database outside a request.
+const { AsyncLocalStorage } = require('async_hooks'); const als = new AsyncLocalStorage();
+const db = new Proxy({}, { get(_, k) { const t = als.getStore() || rawDb; const v = t[k]; return typeof v === 'function' ? v.bind(t) : v } });
 const REMOTE = !!(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
 
 db.exec(`
@@ -243,15 +247,34 @@ const app = express();
 app.use(cors());
 app.use((req, res, next) => /^\/api\/v1\/app\/(brands\/catalogue|profiles\/import|profiles\/[^/]+\/image|inventory\/hardware-import|glass\/import)/.test(req.path) ? next() : express.json()(req, res, next));
 const api = express.Router();
-if (REMOTE) api.use(require('./persist')(db, { url: process.env.TURSO_DATABASE_URL, token: process.env.TURSO_AUTH_TOKEN, tmp: process.env.VERCEL ? '/tmp' : require('os').tmpdir() }));
 
 // Stateless signed tokens: on serverless the DB resets between instances, so a token stored in
 // the tokens table vanishes and the user is bounced back to login. A v1 token carries the user id
 // and expiry, signed with HMAC, and is verified without any DB row. base64 never contains '.', so
 // splitting on '.' is safe.
+rawDb.exec("CREATE TABLE IF NOT EXISTS accounts (tenant TEXT PRIMARY KEY, email TEXT UNIQUE, company TEXT, plan TEXT DEFAULT 'trial', created_at TEXT)");
+const fs1 = require('fs'), TMP = process.env.VERCEL ? '/tmp' : require('os').tmpdir(), TDIR = path.join(TMP, 'fw-tenants'); fs1.mkdirSync(TDIR, { recursive: true });
+const tenants = new Map(), KEEP = new Set(['hardware', 'profiles', 'glass', 'settings', 'accounts']);
+const mkPersist = (d, ns) => REMOTE ? require('./persist')(d, { url: process.env.TURSO_DATABASE_URL, token: process.env.TURSO_AUTH_TOKEN, tmp: TMP, ns }) : null;
+tenants.set('main', { db: rawDb, mw: mkPersist(rawDb, '') });
+function getTenant(id) {
+  if (tenants.has(id)) return tenants.get(id);
+  if (!/^t[a-f0-9]{12}$/.test(id)) return null;
+  const f = path.join(TDIR, id + '.db');
+  if (!fs1.existsSync(f)) { // new company: copy the schema and rate catalogue, drop every other company's business data
+    const tmpf = f + '.new'; try { fs1.unlinkSync(tmpf) } catch (e) {} rawDb.exec(`VACUUM INTO '${tmpf}'`);
+    const t = new Database(tmpf); t.pragma('journal_mode = DELETE');
+    for (const { name } of t.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+      if (name === 'accounts') t.exec('DROP TABLE accounts'); else if (!KEEP.has(name)) t.exec(`DELETE FROM "${name}"`);
+    }
+    t.close(); fs1.renameSync(tmpf, f);
+  }
+  const d = new Database(f); d.pragma('journal_mode = WAL');
+  const T = { db: d, mw: mkPersist(d, id) }; tenants.set(id, T); return T;
+}
 const AUTH_SECRET = process.env.AUTH_SECRET || 'fenstraworks-auth';
 const tsig = s => crypto.createHmac('sha256', AUTH_SECRET).update(s).digest('hex').slice(0, 32);
-const mkToken = userId => { const p = Buffer.from(JSON.stringify({ u: userId, x: Date.now() + 30 * 864e5 })).toString('base64'); return 'v1.' + p + '.' + tsig(p) };
+const mkToken = (userId, t) => { const p = Buffer.from(JSON.stringify({ u: userId, t: t || undefined, x: Date.now() + 30 * 864e5 })).toString('base64'); return 'v1.' + p + '.' + tsig(p) };
 const tokenUser = t => {
   if (!t) return null;
   if (t.startsWith('v1.')) {
@@ -263,11 +286,43 @@ const tokenUser = t => {
   return row && row.user_id;
 };
 
+const pwHash = p => { const salt = crypto.randomBytes(8).toString('hex'); return 'h$' + salt + '$' + crypto.scryptSync(String(p), salt, 24).toString('hex') };
+const pwOk = (u, p) => { if (!u || p == null) return false; const w = u.password || ''; if (!w.startsWith('h$')) return w === p; const [, salt, h] = w.split('$'); return crypto.scryptSync(String(p), salt, 24).toString('hex') === h };
+// every request runs inside its own company's database; the company id travels inside the signed login token
+api.use((req, res, next) => {
+  let tid = 'main'; const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
+  if (t && t.startsWith('v1.')) { const [, p, s] = t.split('.'); if (p && s === tsig(p)) { try { tid = JSON.parse(Buffer.from(p, 'base64').toString()).t || 'main' } catch (e) {} } }
+  else if (req.path === '/auth/login' && req.body && req.body.email) { const a = rawDb.prepare('SELECT tenant FROM accounts WHERE email=?').get(String(req.body.email).trim().toLowerCase()); if (a) tid = a.tenant }
+  const T = getTenant(tid); if (!T) return res.status(401).json({ error: 'Unauthorized' });
+  req.tenant = tid; als.run(T.db, () => T.mw ? T.mw(req, res, next) : next());
+});
+// Automatic error detection: server 5xx and browser JS errors are recorded so problems are found without anyone reporting them
+rawDb.exec("CREATE TABLE IF NOT EXISTS error_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, kind TEXT, tenant TEXT, where_ TEXT, message TEXT)");
+const logErr = (kind, tenant, where_, message) => { try { rawDb.prepare('INSERT INTO error_log (at,kind,tenant,where_,message) VALUES (?,?,?,?,?)').run(new Date().toISOString(), kind, tenant || '', String(where_ || '').slice(0, 200), String(message || '').slice(0, 800)); rawDb.exec('DELETE FROM error_log WHERE id < (SELECT MAX(id) FROM error_log) - 500') } catch (e) {} };
+api.use((req, res, next) => { res.on('finish', () => { if (res.statusCode >= 500) logErr('server', req.tenant, req.method + ' ' + req.path, 'HTTP ' + res.statusCode) }); next() });
+api.post('/client-error', (req, res) => { const b = req.body || {}; logErr('browser', req.tenant, b.url, b.message); res.json({ ok: true }) });
 api.post('/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  const u = db.prepare('SELECT * FROM users WHERE email=? AND password=?').get(email, password);
-  if (!u) return res.status(401).json({ error: 'Invalid email or password' });
-  res.json({ token: mkToken(u.id), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+  const { email, password } = req.body || {};
+  const u = db.prepare('SELECT * FROM users WHERE lower(email)=lower(?)').get(String(email || '').trim());
+  if (!u || !pwOk(u, password)) return res.status(401).json({ error: 'Invalid email or password' });
+  res.json({ token: mkToken(u.id, req.tenant === 'main' ? '' : req.tenant), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+});
+// Self-service signup: creates a new company with its own private data
+api.post('/auth/signup', async (req, res) => {
+  try {
+    const { company, name, email, password } = req.body || {}, em = String(email || '').trim().toLowerCase();
+    if (!String(company || '').trim() || !String(name || '').trim()) return res.status(400).json({ error: 'Enter your company and your name' });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return res.status(400).json({ error: 'Enter a valid email address' });
+    if (String(password || '').length < 8) return res.status(400).json({ error: 'Use at least 8 characters for the password' });
+    if (rawDb.prepare('SELECT 1 FROM accounts WHERE email=?').get(em) || rawDb.prepare('SELECT 1 FROM users WHERE lower(email)=?').get(em)) return res.status(409).json({ error: 'This email already has an account. Please log in.' });
+    const tid = 't' + crypto.randomBytes(6).toString('hex'), T = getTenant(tid), uid0 = crypto.randomUUID();
+    T.db.prepare('INSERT INTO users (id,name,email,password,role) VALUES (?,?,?,?,?)').run(uid0, String(name).trim(), em, pwHash(password), 'admin');
+    const co = (() => { try { return JSON.parse(T.db.prepare("SELECT value FROM settings WHERE key='company'").get().value) } catch (e) { return {} } })();
+    T.db.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('company', JSON.stringify({ ...co, name: String(company).trim(), email: em }));
+    rawDb.prepare('INSERT INTO accounts (tenant,email,company,plan,created_at) VALUES (?,?,?,?,?)').run(tid, em, String(company).trim(), 'trial', new Date().toISOString());
+    if (T.mw) await T.mw.pushNow();
+    res.json({ token: mkToken(uid0, tid), user: { id: uid0, name: String(name).trim(), email: em, role: 'admin' } });
+  } catch (e) { console.error('signup failed', e); res.status(500).json({ error: 'Could not create the account, please retry.' }) }
 });
 api.use((req, res, next) => {
   const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
@@ -277,8 +332,9 @@ api.use((req, res, next) => {
   req.user = user;
   next();
 });
-api.get('/auth/me', (req, res) => res.json(req.user));
+api.get('/auth/me', (req, res) => { const a = req.tenant === 'main' ? null : rawDb.prepare('SELECT company, plan, created_at FROM accounts WHERE tenant=?').get(req.tenant); res.json({ ...req.user, tenant: req.tenant, company: a ? a.company : undefined, plan: a ? a.plan : 'owner' }) });
 
+api.get('/admin/errors', (req, res) => { if (req.tenant !== 'main') return res.status(403).json({ error: 'Forbidden' }); res.json(rawDb.prepare('SELECT * FROM error_log ORDER BY id DESC LIMIT 100').all()) });
 api.get('/dashboard', (req, res) => {
   const qs = db.prepare('SELECT q.*, c.name AS customer FROM quotations q LEFT JOIN customers c ON c.id=q.customer_id ORDER BY q.created_at DESC').all();
   const withTotal = qs.map(q => ({ ...q, total: quoteTotals(q.id).total }));
@@ -949,9 +1005,9 @@ api.get('/account', (req, res) => {
 api.put('/account/language', (req, res) => { db.prepare("INSERT OR REPLACE INTO settings (key,value) VALUES ('language',?)").run(JSON.stringify(req.body.language || 'English')); res.json({ ok: true }) });
 api.post('/auth/password', (req, res) => {
   const { current, next } = req.body || {}; const u = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
-  if (!u || u.password !== current) return res.status(400).json({ error: 'Current password is incorrect' });
+  if (!u || !pwOk(u, current)) return res.status(400).json({ error: 'Current password is incorrect' });
   if (!next || String(next).length < 8) return res.status(400).json({ error: 'Use at least 8 characters' });
-  db.prepare('UPDATE users SET password=? WHERE id=?').run(next, u.id); res.json({ ok: true });
+  db.prepare('UPDATE users SET password=? WHERE id=?').run(pwHash(next), u.id); res.json({ ok: true });
 });
 api.delete('/account/sessions/:id', (req, res) => { const i = SESSIONS.findIndex(x => x.id === req.params.id && !x.current); if (i >= 0) SESSIONS.splice(i, 1); res.json({ ok: true }) });
 api.get('/getting-started', (req, res) => res.json({ done: 7, total: 10, steps: [

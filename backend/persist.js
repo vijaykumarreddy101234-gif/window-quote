@@ -2,7 +2,8 @@
 // (plain HTTPS "pipeline" API). Every request first pulls a newer snapshot if another instance wrote one;
 // every successful write request pushes a new snapshot before its response is sent.
 const zlib = require('zlib'), fs = require('fs');
-module.exports = function persist(db, { url, token, tmp = '/tmp' }) {
+module.exports = function persist(db, { url, token, tmp = '/tmp', ns = '' }) {
+  const sfx = ns ? '_' + ns.replace(/[^a-z0-9]/gi, '') : '', T_LOCK = 'snap_lock' + sfx, T_META = 'snap_meta' + sfx, T_PARTS = 'snap_parts' + sfx;
   const base = url.replace(/^libsql:/, 'https:').replace(/\/$/, '');
   const arg = v => typeof v === 'number' ? { type: 'integer', value: String(v) } : { type: 'text', value: String(v) };
   async function run(stmts) {
@@ -13,10 +14,10 @@ module.exports = function persist(db, { url, token, tmp = '/tmp' }) {
     return j.results.slice(0, stmts.length).map(x => x.response && x.response.result ? x.response.result.rows.map(row => row.map(c => c.value)) : []);
   }
   let localV = 0, ready = null, chain = Promise.resolve();
-  const SETUP = [['CREATE TABLE IF NOT EXISTS snap_lock (k TEXT PRIMARY KEY, owner TEXT, until INTEGER)'], ['CREATE TABLE IF NOT EXISTS snap_meta (k TEXT PRIMARY KEY, v TEXT)'], ['CREATE TABLE IF NOT EXISTS snap_parts (version INTEGER, part INTEGER, data TEXT, PRIMARY KEY (version, part))']];
-  async function remoteVersion() { const res = await run([...SETUP, ["SELECT v FROM snap_meta WHERE k='version'"]]), rows = res[res.length - 1]; return rows[0] ? +rows[0][0] : 0 }
+  const SETUP = [[`CREATE TABLE IF NOT EXISTS ${T_LOCK} (k TEXT PRIMARY KEY, owner TEXT, until INTEGER)`], [`CREATE TABLE IF NOT EXISTS ${T_META} (k TEXT PRIMARY KEY, v TEXT)`], [`CREATE TABLE IF NOT EXISTS ${T_PARTS} (version INTEGER, part INTEGER, data TEXT, PRIMARY KEY (version, part))`]];
+  async function remoteVersion() { const res = await run([...SETUP, [`SELECT v FROM ${T_META} WHERE k='version'`]]), rows = res[res.length - 1]; return rows[0] ? +rows[0][0] : 0 }
   async function pull(v) {
-    const [rows] = await run([['SELECT data FROM snap_parts WHERE version=? ORDER BY part', [v]]]);
+    const [rows] = await run([[`SELECT data FROM ${T_PARTS} WHERE version=? ORDER BY part`, [v]]]);
     const buf = zlib.gunzipSync(Buffer.from(rows.map(r => r[0]).join(''), 'base64')), f = tmp + '/remote-' + process.pid + '-' + Date.now() + '.db'; fs.writeFileSync(f, buf);
     db.exec(`ATTACH DATABASE '${f}' AS rm`);
     try {
@@ -33,25 +34,25 @@ module.exports = function persist(db, { url, token, tmp = '/tmp' }) {
     const f = tmp + '/save-' + process.pid + '-' + Date.now() + '.db'; try { fs.unlinkSync(f) } catch (e) {} db.exec(`VACUUM INTO '${f}'`);
     const b64 = zlib.gzipSync(fs.readFileSync(f)).toString('base64'); fs.unlinkSync(f);
     const v = Math.max(localV, await remoteVersion()) + 1, parts = []; for (let i = 0; i < b64.length; i += 400000) parts.push(b64.slice(i, i + 400000));
-    await run([...SETUP, ...parts.map((p, i) => ['INSERT INTO snap_parts (version, part, data) VALUES (?,?,?)', [v, i, p]])]);
-    await run([["INSERT INTO snap_meta (k,v) VALUES ('version',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", [v]], ['DELETE FROM snap_parts WHERE version < ?', [v - 1]]]);
+    await run([...SETUP, ...parts.map((p, i) => [`INSERT INTO ${T_PARTS} (version, part, data) VALUES (?,?,?)`, [v, i, p]])]);
+    await run([[`INSERT INTO ${T_META} (k,v) VALUES ('version',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, [v]], [`DELETE FROM ${T_PARTS} WHERE version < ?`, [v - 1]]]);
     localV = v; if (process.env.PERSIST_DEBUG) console.log('pushed', v);
   }
   // global write lease: one write request at a time across all instances, so snapshots never overwrite each other
   async function lock(owner) {
     for (let i = 0; i < 60; i++) {
-      try { await run([...SETUP, ['DELETE FROM snap_lock WHERE until < ?', [Date.now()]], ["INSERT INTO snap_lock (k, owner, until) VALUES ('w', ?, ?)", [owner, Date.now() + 25000]]]); if (process.env.PERSIST_DEBUG) console.log(Date.now()%100000, 'LOCK', owner.slice(0,5)); return true } catch (e) { if (!/constraint|UNIQUE|PRIMARY/i.test(e.message)) throw e; await new Promise(r => setTimeout(r, 120 + Math.random() * 180)) }
+      try { await run([...SETUP, [`DELETE FROM ${T_LOCK} WHERE until < ?`, [Date.now()]], [`INSERT INTO ${T_LOCK} (k, owner, until) VALUES ('w', ?, ?)`, [owner, Date.now() + 25000]]]); if (process.env.PERSIST_DEBUG) console.log(Date.now()%100000, 'LOCK', owner.slice(0,5)); return true } catch (e) { if (!/constraint|UNIQUE|PRIMARY/i.test(e.message)) throw e; await new Promise(r => setTimeout(r, 120 + Math.random() * 180)) }
     }
     return false;
   }
-  const unlock = owner => run([['DELETE FROM snap_lock WHERE owner = ?', [owner]]]).then(r => { if (process.env.PERSIST_DEBUG) console.log(Date.now()%100000, 'UNLOCK', owner.slice(0,5)) }).catch(e => console.error('unlock failed:', e.message));
+  const unlock = owner => run([[`DELETE FROM ${T_LOCK} WHERE owner = ?`, [owner]]]).then(r => { if (process.env.PERSIST_DEBUG) console.log(Date.now()%100000, 'UNLOCK', owner.slice(0,5)) }).catch(e => console.error('unlock failed:', e.message));
   const init = () => ready || (ready = (async () => {
     const v = await remoteVersion(); if (v > 0) { await pull(v); console.log('persist: ready, version', localV); return }
     const owner = 'init' + Math.random().toString(36).slice(2); if (!(await lock(owner))) throw new Error('init lock timeout');
     try { const v2 = await remoteVersion(); if (v2 > 0) await pull(v2); else await push(); console.log('persist: ready, version', localV) } finally { await unlock(owner) }
   })().catch(e => { ready = null; throw e }));
   let offUntil = 0;
-  return async function middleware(req, res, next) {
+  const mw = async function middleware(req, res, next) {
     if (Date.now() < offUntil) return next();
     const write = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS', owner = Math.random().toString(36).slice(2) + Date.now();
     try {
@@ -73,4 +74,6 @@ module.exports = function persist(db, { url, token, tmp = '/tmp' }) {
     }
     next();
   };
+  mw.init = init; mw.pushNow = push;
+  return mw;
 };
