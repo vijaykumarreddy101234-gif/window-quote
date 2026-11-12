@@ -52,8 +52,12 @@ export default function Designer() {
   const redo = () => { if (!fut.length) return; setHist(h => [...h, dsn]); setDsn(fut[0]); setFut(f => f.slice(1)) }
   const typeOf = x => x.kind === 'sliding' ? (x.fixedTop ? 'combination' : 'sliding') : (x.cols.length > 1 || x.cols.some(c => c.rows.length > 1) ? (x.cols.every(c => c.rows.every(r => r.op === 'FIXED')) ? 'fixed' : 'combination') : x.cols[0].rows[0].op === 'FIXED' ? 'fixed' : 'casement')
   const save = async () => {
-    const r = await api(`/quotations/${id}/items/${itemId}/design`, { method: 'PUT', body: { design: dsn, width: size[0], height: size[1], qty, type: typeOf(dsn), mesh: dsn.mesh ? (dsn.meshType || 'SS mesh') : 'No mesh', glass: glassName } })
-    setD(r); setHist([]); setFut([]); setMsg('Saved'); setTimeout(() => setMsg(''), 1800)
+    setMsg('Saving…')
+    try {
+      const r = await api(`/quotations/${id}/items/${itemId}/design`, { method: 'PUT', body: { design: dsn, width: size[0], height: size[1], qty, type: typeOf(dsn), mesh: dsn.mesh ? (dsn.meshType || 'SS mesh') : 'No mesh', glass: glassName } })
+      if (!r || r.error) throw new Error((r && r.error) || 'Save failed')
+      setD(r); setHist([]); setFut([]); setMsg('Saved'); setTimeout(() => setMsg(''), 1800)
+    } catch (err) { setMsg(''); say('Could not save the design: ' + (err.message || err) + '. Please try again.') }
   }
   const grid = dsn.kind === 'grid', cells = grid ? dsn.cols.flatMap(c => c.rows) : []
   const setOp = op => { if (sel == null || !grid) return; let i = 0; push({ ...dsn, cols: dsn.cols.map(c => ({ ...c, rows: c.rows.map(r => (i++ === sel ? { ...r, op } : r)) })) }) }
