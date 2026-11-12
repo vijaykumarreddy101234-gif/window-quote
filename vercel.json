@@ -10,5 +10,9 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
-  ]
+  ],
+  "regions": [
+    "bom1"
+  ],
+  "outputDirectory": "frontend/dist"
 }
