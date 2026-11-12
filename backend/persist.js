@@ -32,22 +32,25 @@ module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret
   async function push() {
     const f = tmp + '/save-' + process.pid + '-' + Date.now() + '.db'; db.exec(`VACUUM INTO '${f}'`);
     const body = enc(zlib.gzipSync(fs.readFileSync(f))); fs.unlinkSync(f);
-    const cur = await latest(), v = Math.max(localV, cur ? vOf(cur) : 0) + 1;
+    const bs = await list(P + 'snap/'), v = Math.max(localV, ...bs.map(vOf)) + 1;
     await put(P + 'snap/v' + v + '.bin', body); localV = v;
-    const old = (await list(P + 'snap/')).filter(b => vOf(b) < v - 1).map(b => b.url); if (old.length) await del(old);
+    const old = bs.filter(b => vOf(b) < v - 1).map(b => b.url); if (old.length) del(old); // prune older snapshots (not awaited)
   }
   // write lease across instances: each writer drops a ticket, the oldest live ticket owns the lock
   const tk = owner => P + 'lock/' + owner;
+  const tickets = new Map();
   async function lock(owner) {
-    const mine = Date.now(); await put(tk(mine + '-' + owner), Buffer.from('1'));
+    const mine = Date.now(); tickets.set(owner, await put(tk(mine + '-' + owner), Buffer.from('1')));
     for (let i = 0; i < 80; i++) {
-      const ts = (await list(P + 'lock/')).map(b => ({ b, t: +(b.pathname.split('/').pop().split('-')[0] || 0) })).filter(x => x.t > Date.now() - 25000).sort((a, b) => a.t - b.t);
+      const all = (await list(P + 'lock/')).map(b => ({ b, t: +(b.pathname.split('/').pop().split('-')[0] || 0) })), stale = all.filter(x => x.t < Date.now() - 25000).map(x => x.b.url);
+      if (stale.length) del(stale);
+      const ts = all.filter(x => x.t >= Date.now() - 25000).sort((a, b) => a.t - b.t);
       if (!ts.length || ts[0].b.pathname === tk(mine + '-' + owner)) return true;
       await new Promise(r => setTimeout(r, 150 + Math.random() * 200));
     }
     await unlock(owner); return false;
   }
-  const unlock = async owner => { try { const bs = (await list(P + 'lock/')).filter(b => b.pathname.endsWith('-' + owner) || +(b.pathname.split('/').pop().split('-')[0] || 0) < Date.now() - 25000); await del(bs.map(b => b.url)) } catch (e) { console.error('unlock:', e.message) } };
+  const unlock = async owner => { const u = tickets.get(owner); tickets.delete(owner); if (u) await del([u]) };
   const init = () => ready || (ready = (async () => { const b = await latest(); if (b) await pull(b); else await push(); console.log('persist(' + ns + '): ready, version', localV) })().catch(e => { ready = null; throw e }));
   let offUntil = 0;
   const mw = async function middleware(req, res, next) {
