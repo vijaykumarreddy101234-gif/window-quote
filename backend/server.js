@@ -15,7 +15,7 @@ const rawDb = new Database(DBFILE); rawDb.pragma('journal_mode = WAL');
 // company (via AsyncLocalStorage) and falls back to the main/demo database outside a request.
 const { AsyncLocalStorage } = require('async_hooks'); const als = new AsyncLocalStorage();
 const db = new Proxy({}, { get(_, k) { const t = als.getStore() || rawDb; const v = t[k]; return typeof v === 'function' ? v.bind(t) : v } });
-const REMOTE = false; // external database server removed: data lives in local SQLite files only
+const BLOB = process.env.BLOB_READ_WRITE_TOKEN || ''; // Vercel Blob keeps data permanent on Vercel (no separate database server)
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT, role TEXT);
@@ -253,8 +253,8 @@ const api = express.Router();
 rawDb.exec("CREATE TABLE IF NOT EXISTS accounts (tenant TEXT PRIMARY KEY, email TEXT UNIQUE, company TEXT, plan TEXT DEFAULT 'trial', created_at TEXT)");
 const fs1 = require('fs'), TMP = process.env.VERCEL ? '/tmp' : require('os').tmpdir(), TDIR = path.join(TMP, 'fw-tenants'); fs1.mkdirSync(TDIR, { recursive: true });
 const tenants = new Map(), KEEP = new Set(['hardware', 'profiles', 'glass', 'settings', 'accounts']);
-const mkPersist = () => null;
-tenants.set('main', { db: rawDb, mw: mkPersist(rawDb, '') });
+const mkPersist = (d, ns) => BLOB ? require('./persist')(d, { token: BLOB, tmp: TMP, ns: ns || 'main', secret: process.env.AUTH_SECRET || 'fenstraworks-auth', api: process.env.BLOB_API_URL }) : null;
+tenants.set('main', { db: rawDb, mw: mkPersist(rawDb, 'main') });
 function getTenant(id) {
   if (tenants.has(id)) return tenants.get(id);
   if (!/^t[a-f0-9]{12}$/.test(id)) return null;
@@ -287,10 +287,12 @@ const tokenUser = t => {
 const pwHash = p => { const salt = crypto.randomBytes(8).toString('hex'); return 'h$' + salt + '$' + crypto.scryptSync(String(p), salt, 24).toString('hex') };
 const pwOk = (u, p) => { if (!u || p == null) return false; const w = u.password || ''; if (!w.startsWith('h$')) return w === p; const [, salt, h] = w.split('$'); return crypto.scryptSync(String(p), salt, 24).toString('hex') === h };
 // every request runs inside its own company's database; the company id travels inside the signed login token
-api.use((req, res, next) => {
+api.use(async (req, res, next) => {
   let tid = 'main'; const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
   if (t && t.startsWith('v1.')) { const [, p, s] = t.split('.'); if (p && s === tsig(p)) { try { tid = JSON.parse(Buffer.from(p, 'base64').toString()).t || 'main' } catch (e) {} } }
-  else if (req.path === '/auth/login' && req.body && req.body.email) { const a = rawDb.prepare('SELECT tenant FROM accounts WHERE email=?').get(String(req.body.email).trim().toLowerCase()); if (a) tid = a.tenant }
+  else if (req.path === '/auth/login' && req.body && req.body.email) {
+    const M = tenants.get('main'); if (M.mw) { try { await M.mw.sync() } catch (e) { console.error('login sync:', e.message) } } // see accounts created on other instances
+    const a = rawDb.prepare('SELECT tenant FROM accounts WHERE email=?').get(String(req.body.email).trim().toLowerCase()); if (a) tid = a.tenant }
   const T = getTenant(tid); if (!T) return res.status(401).json({ error: 'Unauthorized' });
   req.tenant = tid; als.run(T.db, () => T.mw ? T.mw(req, res, next) : next());
 });
@@ -318,6 +320,7 @@ api.post('/auth/signup', async (req, res) => {
     const co = (() => { try { return JSON.parse(T.db.prepare("SELECT value FROM settings WHERE key='company'").get().value) } catch (e) { return {} } })();
     T.db.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('company', JSON.stringify({ ...co, name: String(company).trim(), email: em }));
     rawDb.prepare('INSERT INTO accounts (tenant,email,company,plan,created_at) VALUES (?,?,?,?,?)').run(tid, em, String(company).trim(), 'trial', new Date().toISOString());
+    if (T.mw) { try { await T.mw.pushNow() } catch (e) { console.error('signup: snapshot failed:', e.message) } }
     res.json({ token: mkToken(uid0, tid), user: { id: uid0, name: String(name).trim(), email: em, role: 'admin' } });
   } catch (e) { console.error('signup failed', e); logErr('server', 'main', 'signup', e && e.message); res.status(500).json({ error: 'Could not create the account, please retry.' }) }
 });
