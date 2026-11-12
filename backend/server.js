@@ -10,14 +10,12 @@ if (process.env.VERCEL) { // serverless: writable disk is /tmp only; start from 
   const fs0 = require('fs'); DBFILE = process.env.DB_FILE || '/tmp/fenestra.db';
   if (!fs0.existsSync(DBFILE) && fs0.existsSync(path.join(__dirname, 'seed.db'))) fs0.copyFileSync(path.join(__dirname, 'seed.db'), DBFILE);
 }
-// Persistent database: when TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set (Vercel), use a Turso embedded replica
-// (reads are local, writes go to the shared primary), so data survives cold starts and is shared by every instance.
 const rawDb = new Database(DBFILE); rawDb.pragma('journal_mode = WAL');
 // SaaS: every company (tenant) has its own private database file. `db` below always points at the current request's
 // company (via AsyncLocalStorage) and falls back to the main/demo database outside a request.
 const { AsyncLocalStorage } = require('async_hooks'); const als = new AsyncLocalStorage();
 const db = new Proxy({}, { get(_, k) { const t = als.getStore() || rawDb; const v = t[k]; return typeof v === 'function' ? v.bind(t) : v } });
-const REMOTE = !!(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
+const REMOTE = false; // external database server removed: data lives in local SQLite files only
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, email TEXT UNIQUE, password TEXT, role TEXT);
@@ -255,7 +253,7 @@ const api = express.Router();
 rawDb.exec("CREATE TABLE IF NOT EXISTS accounts (tenant TEXT PRIMARY KEY, email TEXT UNIQUE, company TEXT, plan TEXT DEFAULT 'trial', created_at TEXT)");
 const fs1 = require('fs'), TMP = process.env.VERCEL ? '/tmp' : require('os').tmpdir(), TDIR = path.join(TMP, 'fw-tenants'); fs1.mkdirSync(TDIR, { recursive: true });
 const tenants = new Map(), KEEP = new Set(['hardware', 'profiles', 'glass', 'settings', 'accounts']);
-const mkPersist = (d, ns) => REMOTE ? require('./persist')(d, { url: process.env.TURSO_DATABASE_URL, token: process.env.TURSO_AUTH_TOKEN, tmp: TMP, ns }) : null;
+const mkPersist = () => null;
 tenants.set('main', { db: rawDb, mw: mkPersist(rawDb, '') });
 function getTenant(id) {
   if (tenants.has(id)) return tenants.get(id);
@@ -320,7 +318,6 @@ api.post('/auth/signup', async (req, res) => {
     const co = (() => { try { return JSON.parse(T.db.prepare("SELECT value FROM settings WHERE key='company'").get().value) } catch (e) { return {} } })();
     T.db.prepare('INSERT OR REPLACE INTO settings VALUES (?,?)').run('company', JSON.stringify({ ...co, name: String(company).trim(), email: em }));
     rawDb.prepare('INSERT INTO accounts (tenant,email,company,plan,created_at) VALUES (?,?,?,?,?)').run(tid, em, String(company).trim(), 'trial', new Date().toISOString());
-    if (T.mw) { try { await T.mw.pushNow() } catch (e) { if (!/turso http (400|401|403)/.test(e.message)) throw e; console.error('signup: persistence unavailable (check TURSO_AUTH_TOKEN)') } }
     res.json({ token: mkToken(uid0, tid), user: { id: uid0, name: String(name).trim(), email: em, role: 'admin' } });
   } catch (e) { console.error('signup failed', e); logErr('server', 'main', 'signup', e && e.message); res.status(500).json({ error: 'Could not create the account, please retry.' }) }
 });
