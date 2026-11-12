@@ -67,8 +67,16 @@ export default function Designer() {
   const locate = idx => { let i = 0; for (let ci = 0; ci < dsn.cols.length; ci++) for (let ri = 0; ri < dsn.cols[ci].rows.length; ri++) { if (i++ === idx) return [ci, ri] } return [0, 0] }
   const clampF = f => Math.min(0.8, Math.max(0.2, f))
   const onCell = (idx, fx, fy) => {
-    if (!grid || !dv || !edit) return
+    if (!dv || !edit) return
+    const axis = dv === 'mullion' ? 'V' : 'H', ratio = clampF(axis === 'V' ? (side === 'outside' ? 1 - fx : fx) : fy)
+    // partition inside a sliding sash: one mullion (V) or transom (H) welded into the sash, glass split in two (as the demo's sash partitions)
+    if (!grid) { const cur = (dsn.sashSplit || {})[idx]; const ss = { ...(dsn.sashSplit || {}) }; if (cur && cur.axis === axis) delete ss[idx]; else ss[idx] = { axis, ratio: Math.round(ratio * 100) / 100 }; push({ ...dsn, sashSplit: ss }); setDv(null); setSel(null); return }
     const [ci, ri] = locate(idx), c = dsn.cols[ci]
+    const row = c.rows[ri], opening = row.op !== 'FIXED' && row.op !== 'LOUVRE' && row.op !== 'FAN'
+    if (opening) { // partition inside a casement / top-hung / door sash
+      const cur = row.split, split = cur && cur.axis === axis ? undefined : { axis, ratio: Math.round(ratio * 100) / 100 }
+      push({ ...dsn, cols: dsn.cols.map((cc, k) => k === ci ? { ...cc, rows: cc.rows.map((r, j) => j === ri ? { ...r, split } : r) } : cc) }); setDv(null); setSel(null); return
+    }
     if (dv === 'mullion') {
       const f = clampF(side === 'outside' ? 1 - fx : fx), keep = c.rows.map(r => ({ ...r })), left = c.rows.map(r => ({ ...r, op: 'FIXED' }))
       push({ ...dsn, cols: [...dsn.cols.slice(0, ci), { w: c.w * f, rows: left }, { w: c.w * (1 - f), rows: keep }, ...dsn.cols.slice(ci + 1)] })
@@ -157,8 +165,8 @@ export default function Designer() {
         {tool === 'designs' && <Sheet title="DESIGNS" onClose={close}>{GROUPS.map(g => <div key={g}><div className="sec">{g}</div><div className="cards">{GALLERY.filter(t => t.group === g).map(t => <button key={t.id} className="dcard" disabled={!edit} onClick={() => { push(t.d); setSize([t.w, t.h]); setSel(null) }}>
             {badge(t.d) && <span className="bdg">{badge(t.d)}</span>}<div className="th"><DesignThumb t={t} /></div><b>{t.name}</b></button>)}</div></div>)}</Sheet>}
         {tool === 'divide' && <Sheet title="DIVIDE & JOIN" onClose={close}><div className="cards">
-          {[['mullion', 'Mullion', () => grid ? setDv(dv === 'mullion' ? null : 'mullion') : addCol()], ['transom', 'Transom', () => grid ? setDv(dv === 'transom' ? null : 'transom') : null], ['couplerh', 'Coupler ↔', () => addCol()], ['couplerv', 'Coupler ↕', addRow], ['mirror', 'Mirror design', mirror], ['georgian', 'Georgian bars', () => push({ ...dsn, georgian: !dsn.georgian })]].map(([k, l, f]) =>
-            <button key={k} className={'dcard sq' + ((k === 'georgian' && dsn.georgian) || dv === k ? ' on' : '')} disabled={!edit} onClick={f}><Ic k={k} /><b>{l}</b></button>)}</div>{dv && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>Click the pane on the drawing where the {dv} should go.</div>}
+          {[['mullion', 'Mullion', () => setDv(dv === 'mullion' ? null : 'mullion')], ['transom', 'Transom', () => setDv(dv === 'transom' ? null : 'transom')], ['couplerh', 'Coupler ↔', () => addCol()], ['couplerv', 'Coupler ↕', addRow], ['mirror', 'Mirror design', mirror], ['georgian', 'Georgian bars', () => push({ ...dsn, georgian: !dsn.georgian })]].map(([k, l, f]) =>
+            <button key={k} className={'dcard sq' + ((k === 'georgian' && dsn.georgian) || dv === k ? ' on' : '')} disabled={!edit} onClick={f}><Ic k={k} /><b>{l}</b></button>)}</div>{dv && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>Click the pane on the drawing where the {dv} should go. On a sash it becomes a partition inside that sash (click again with the same tool to remove it); on a fixed pane it splits the frame.</div>}
           {dsn.kind === 'sliding' && <div style={{ marginTop: 10 }}><div className="sec">SLIDING PANELS</div>
             <Radios label="Panels" opts={['2', '3', '4']} val={String(dsn.panels)} on={v => push({ ...dsn, panels: +v, widths: undefined, dirs: undefined, mesh: Math.min(dsn.mesh || 0, +v - 1) })} />
             <Radios label="Mesh shutters" opts={['0', '1', '2']} val={String(dsn.mesh || 0)} on={v => { const m = Math.min(+v, dsn.panels - 1), ok = ['80', '92', '95', '112'].includes(dsn.series || (e && e.series)); push({ ...dsn, mesh: m, ...(m && !ok ? { series: dsn.panels === 2 ? '92' : '80', profiles: {}, tracks: undefined } : {}) }) }} />
@@ -356,7 +364,7 @@ function InspectCards({ e, dsn, push, edit, profs, sel }) {
         {cut && <>
           <img className="prof-img" alt={cut.code} src={profileImg(cut.code)} onError={ev => { ev.currentTarget.style.display = 'none' }} />
           <div className="kv"><span>Cut length</span><b>{len0 != null ? Math.round(len0) + ' mm' : '—'}</b></div>
-          <div className="kv"><span>End cuts</span><b>{/Interlock|Coupler|Georgian/.test(role) ? '90° / 90°' : '45° / 45°'}</b></div>
+          <div className="kv"><span>End cuts</span><b>{/^Sash (Mullion|Transom)/.test(role) ? 'V / V (welded into the sash)' : /Interlock|Coupler|Georgian/.test(role) ? '90° / 90°' : '45° / 45°'}</b></div>
           <div className="kv"><span>Finish</span><b>{(dsn.colour && dsn.colour.Window) || 'White'}</b></div></>}
         {ri && cut && <>
           <div className="lab" style={{ marginTop: 8 }}>{role} reinforcement thickness (mm)</div>

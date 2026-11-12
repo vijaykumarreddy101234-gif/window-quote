@@ -58,6 +58,13 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
   const fillP = PROF[D.colour?.Window] || '#fbfbfa', tint = TINT[D.colour?.Glass]
   const rise = archRise(D, W, H), rk = rise * k, tbar = rise ? Math.max(5, 40 * k) : 0
   const gsz = (nm, x, y) => { const p = engine && engine.panes && engine.panes.find(q => q.name === nm); return p && !p.mesh ? <text key={'gs' + nm} x={x} y={y} fontSize="5.5" textAnchor="middle" fill="#64748b">{Math.round(p.w)} × {Math.round(p.h)}</text> : null }
+  // glass of a sash with a partition (sash mullion / transom): two lites and a welded bar, sizes from the engine panes nm+'a' / nm+'b'
+  const splitGlass = (nm, gx, gy, gw, gh, split, mesh) => {
+    if (!split || !split.axis) return <Glass x={gx} y={gy} w={gw} h={gh} mesh={mesh} tint={tint} />
+    const bar = Math.max(3, frame * .55), r = Math.min(.8, Math.max(.2, +split.ratio || .5))
+    if (split.axis === 'V') { const w1 = (gw - bar) * r, w2 = gw - bar - w1; return <g><Glass x={gx} y={gy} w={w1} h={gh} mesh={mesh} tint={tint} /><rect x={gx + w1} y={gy} width={bar} height={gh} fill={fillP} stroke={STROKE} strokeWidth=".8" /><Glass x={gx + w1 + bar} y={gy} w={w2} h={gh} mesh={mesh} tint={tint} />{dims && gsz(nm + 'a', gx + w1 / 2, gy + gh * .82)}{dims && gsz(nm + 'b', gx + w1 + bar + w2 / 2, gy + gh * .82)}</g> }
+    const h1 = (gh - bar) * r, h2 = gh - bar - h1; return <g><Glass x={gx} y={gy} w={gw} h={h1} mesh={mesh} tint={tint} /><rect x={gx} y={gy + h1} width={gw} height={bar} fill={fillP} stroke={STROKE} strokeWidth=".8" /><Glass x={gx} y={gy + h1 + bar} w={gw} h={h2} mesh={mesh} tint={tint} />{dims && gsz(nm + 'a', gx + gw / 2, gy + h1 * .82)}{dims && gsz(nm + 'b', gx + gw / 2, gy + h1 + bar + h2 * .82)}</g>
+  }
   // draggable mullions / transoms: fn(svgX, svgY) -> (design) => design
   const drag = fn => ev => {
     if (!onGeom) return; ev.stopPropagation(); ev.preventDefault(); const svg = ev.currentTarget.ownerSVGElement; let first = true
@@ -117,7 +124,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
       secPanes.push({ x0: x - ox + (i > 0 ? ov / 2 : 0), x1: x - ox + pw - (i < n - 1 ? ov / 2 : 0), lane: isMesh ? Math.min(2, lanes - 1) : i % 2, mesh: isMesh })
       const m62 = isMesh && (engine && engine.meshCode === 'RSM-62MM' || (D.profiles && D.profiles.mesh === 'RSM-62MM')), mt = isMesh ? sash * (m62 ? .85 : .7) : sash
       body.push(<g key={i} {...sel(i)}>
-        <Mitre x={x} y={iy} w={pw} h={sh} t={mt} fill={fillP} /><Glass x={x + mt} y={iy + mt} w={pw - 2 * mt} h={sh - 2 * mt} mesh={isMesh} tint={tint} />
+        <Mitre x={x} y={iy} w={pw} h={sh} t={mt} fill={fillP} />{splitGlass(centre ? ['S1', 'F1', 'S2'][i] : 'S' + (i + 1), x + mt, iy + mt, pw - 2 * mt, sh - 2 * mt, !isMesh && (D.sashSplit || {})[i], isMesh)}
         {!isMesh && <g>{gb(x + sash, iy + sash, pw - 2 * sash, sh - 2 * sash)}</g>}
         {selected === i && <rect x={x} y={iy} width={pw} height={sh} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="4 2" />}
         {dims && <>{tag(cx, iy + sh * .18, centre ? ['S1', 'F1', 'S2'][i] : 'S' + (i + 1), 's' + i)}{isMesh && <text x={cx} y={iy + sh * .18 + 24} fontSize="7" textAnchor="middle" fill="#475569" fontWeight="700">{{ 'RSM-62MM': 'MESH 62', 'RSS-60ES': 'MESH 60x35', 'RSS-75ES': 'MESH 75x35', 'RSS-59SS': 'MESH 59', 'RSS-67MS': 'MESH 67', 'RSS-84BS': 'MESH 84' }[(engine && engine.meshCode) || (D.profiles && D.profiles.mesh)] || 'MESH 53'}</text>}{circ(cx, iy + sh / 2, nn, 'n' + i)}{gsz(centre ? ['S1', 'F1', 'S2'][i] : 'S' + (i + 1), cx, iy + sh / 2 + 18)}</>}
@@ -145,7 +152,7 @@ export function WindowSvg({ item, engine, mode = '2d', side = 'inside', dims = f
         const g = []
         if (open) {
           const t = D.door ? sash * 1.5 : sash
-          g.push(<Mitre key="m" x={x} y={y} w={ww} h={hh} t={t} fill={fillP} />, <Glass key="g" x={x + t} y={y + t} w={ww - 2 * t} h={hh - 2 * t} tint={tint} />)
+          g.push(<Mitre key="m" x={x} y={y} w={ww} h={hh} t={t} fill={fillP} />, <g key="g">{splitGlass('C' + idx, x + t, y + t, ww - 2 * t, hh - 2 * t, r.split)}</g>)
           const gx = x + t, gy = y + t, gw = ww - 2 * t, gh = hh - 2 * t
           g.push(<g key="gb">{gb(gx, gy, gw, gh)}</g>)
           const hingeLeft = (r.op === 'LH') !== flip

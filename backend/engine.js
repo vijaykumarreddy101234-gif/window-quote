@@ -20,6 +20,14 @@ function compute(d, ctx) {
   const cuts = [], hw = [], notes = [];
   const add = (role, code, lens, extra = {}) => { const pr = prof(code); if (!pr) return; const m = lens.reduce((a, b) => a + b, 0) / 1000; cuts.push({ role, code, name: pr.description, lens, kg: m * pr.weight, metres: m, ...extra }); };
   let glassPanes = [];   // {name,w,h}
+  const sashMull = [], sashTrans = [];   // partition members welded inside a sash (sash mullion / sash transom)
+  // split one sash lite in two around a partition bar: returns [{name,w,h}, {name,w,h}] and records the bar + beads; seat = bar face taken out of the glass
+  // bar length as the demo: (finished sash length along the bar − 2 × sash face) + bar bead seat + 2w; sashW/sashH = finished sash sizes, face = sash elevation face
+  const splitLite = (name, gw, gh, split, seat, beadsOut, sashW, sashH, face) => {
+    const r = Math.min(.8, Math.max(.2, +split.ratio || .5));
+    if (split.axis === 'V') { const a = Math.round((gw - seat) * r), b = gw - seat - a; sashMull.push(sashH - 2 * face + seat + 2 * w); beadsOut.push(a, a, gh, gh, b, b, gh, gh); return [{ name: name + 'a', w: a, h: gh }, { name: name + 'b', w: b, h: gh }] }
+    const a = Math.round((gh - seat) * r), b = gh - seat - a; sashTrans.push(sashW - 2 * face + seat + 2 * w); beadsOut.push(gw, gw, a, a, gw, gw, b, b); return [{ name: name + 'a', w: gw, h: a }, { name: name + 'b', w: gw, h: b }];
+  };
   let meshInfo = null; const gaskets = []; let gasketM = 0, riM = 0, hardware = 0, meshArea = 0;
 
   let options = null, error = null, seriesOut = null, meshCodeOut = null, riInfo = null, riKgDirect = null;
@@ -77,11 +85,15 @@ function compute(d, ctx) {
     widths.forEach((sw, i) => {
       sw = Math.round(sw); sashLens.push(sw, sw, sashH, sashH);
       const gd = beadCode === 'RSB-17.5EB' ? 2 : 0; // 17.5 bead: glass sits 2 mm inside the bead, as demo
-      const bw = sw - bd, bh = sashH - bd; beadLens.push(bw, bw, bh, bh);
-      const gw = bw - gd, gh = bh - gd; glassPanes.push({ name: (ctr && i === 1) ? 'F1' : (ctr && i === 2 ? 'S2' : 'S' + (i + 1)), w: gw, h: gh }); glassPanes[glassPanes.length - 1].sl = sw * 2 + sashH * 2; glassPanes[glassPanes.length - 1].gi = Math.max(0, sashH - 100) * 2;
+      const bw = sw - bd, bh = sashH - bd;
+      const gw = bw - gd, gh = bh - gd, pname = (ctr && i === 1) ? 'F1' : (ctr && i === 2 ? 'S2' : 'S' + (i + 1)), sp = (d.sashSplit || {})[i];
+      if (sp && sp.axis && !(ctr && i === 1)) { const bl = []; splitLite(pname, gw, gh, sp, 28, bl, sw - 2 * w, sashH - 2 * w, 59).forEach(g => glassPanes.push(g)); beadLens.push(...bl.map(x => x + gd)); glassPanes.push({ name: pname, w: gw, h: gh, sl: 0, virtual: true }) }
+      else { beadLens.push(bw, bw, bh, bh); glassPanes.push({ name: pname, w: gw, h: gh }) } glassPanes[glassPanes.length - 1].sl = sw * 2 + sashH * 2; glassPanes[glassPanes.length - 1].gi = Math.max(0, sashH - 100) * 2;
     });
     add('Sash', sashCode, sashLens, { grouped: true });
     add('Bead', beadCode, beadLens, { grouped: true });
+    if (sashMull.length) add('Sash Mullion', 'RSM-42SM', sashMull.map(Math.round), { inSash: true });
+    if (sashTrans.length) add('Sash Transom', 'RSM-42SM', sashTrans.map(Math.round), { inSash: true });
     add('Interlock', S.il, Array(d.tracks === 3 && n === 3 && !mesh && !ctr ? 4 : ctr || (mesh === 1 && n > 2) ? n + 1 : n).fill(sashH - 6));
     if (n >= 4) add('Coupler', 'RSA-22SA', [sashH - 6]);
     if (meshN) add('Mesh Sash', meshCode, [...Array(meshN * 2).fill(Math.round(meshW)), ...Array(meshN * 2).fill(sashH)], { grouped: true });
@@ -145,7 +157,8 @@ function compute(d, ctx) {
         if (opening && door) {
           // door leaf: column less 41 mm at each frame edge (fly mullion adds nothing), as demo: single 818, double 859
           const sw = W * c.w / totalW - (ci === 0 ? 41 : 0) - (ci === cols.length - 1 ? 41 : 0) - (sidelightDoor ? 2 : 0), sh = ch - 82, gw = sw - 174, gh = sh - 174;
-          sashLens.push(sw, sw, sh, sh); beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: 'C' + idx, w: gw, h: gh });
+          sashLens.push(sw, sw, sh, sh);
+          if (r.split && r.split.axis) { splitLite('C' + idx, gw, gh, r.split, 34, beadLens, sw, sh, 52).forEach(g => glassPanes.push(g)) } else { beadLens.push(gw, gw, gh, gh); glassPanes.push({ name: 'C' + idx, w: gw, h: gh }) }
           riM += ((sw + sh) * 2 - 400) / 1000;
           hardware += 190 + 3 * 243.54 + 1002; hw.push({ name: 'CASEMENT DOUBLE SIDE DOOR HANDLE · WHITE', qty: 1, rate: 190 }, { name: '3D HINGES · WHITE', qty: 3, rate: 243.54 }, { name: 'CASEMENT DOOR ESPAG WITH CYLINDER 1800 · WHITE', qty: 1, rate: 1002 });
         } else if (opening) {
@@ -154,7 +167,8 @@ function compute(d, ctx) {
           sashLens.push(sw + 2 * w, sw + 2 * w, sh + 2 * w, sh + 2 * w);
           // daylight as the demo measures it: 90 mm off at a jamb (frame + sash + bead), 67 mm off at a mullion (sash hung 28 mm over the mullion)
           const colW = W * c.w / totalW, gw = Math.round(colW - (ci === 0 ? 90 : 67) - (ci === cols.length - 1 ? 90 : 67)), gh = sh - 2 * SASH_FACE;
-          beadLens.push(gw - 4, gw - 4, gh - 4, gh - 4); glassPanes.push({ name: 'C' + idx, w: gw, h: gh });
+          if (r.split && r.split.axis) { const bl = []; splitLite('C' + idx, gw, gh, r.split, 34, bl, sw, sh, 40).forEach(g => glassPanes.push(g)); beadLens.push(...bl.map(x => x - 4)) }
+          else { beadLens.push(gw - 4, gw - 4, gh - 4, gh - 4); glassPanes.push({ name: 'C' + idx, w: gw, h: gh }) }
           riM += ((sw + sh) * 2 - 400) / 1000;
           if (r.op === 'LH' || r.op === 'RH') { hardware += 50 + 2 * 137.5 + 8.8; if (sh >= 800) { hardware += 210; hw.push({ name: 'CASEMENT 15MM BS ESPAG 800 · WHITE', qty: 1, rate: 210 }) } hw.push({ name: 'CASEMENT WINDOW HANDLE · WHITE', qty: 1, rate: 50 }, { name: 'FRICTION STAY 10" · WHITE', qty: 2, rate: 137.5 }, { name: 'CMT ESPAG STRIKER · WHITE', qty: 1, rate: 8.8 }); }
           else if (r.op === 'TOP') { hardware += 2 * 137.5; hw.push({ name: 'FRICTION STAY 10" · WHITE', qty: 2, rate: 137.5 }); }
@@ -178,11 +192,14 @@ function compute(d, ctx) {
     if (sashLens.length) add('Sash', door ? 'RSC-104OD' : 'RSC-78WO', groupLens(sashLens), { grouped: true });
     if (mullP.length) add('Mullion', door ? (sidelightDoor ? 'RSC-74ZM' : 'RSC-60FM') : 'RSC-74TM', mullP);
     if (tm) add('Transom', 'RSC-74TM', [tm]);
+    if (sashMull.length) add('Sash Mullion', 'RSC-74TM', sashMull.map(Math.round), { inSash: true });
+    if (sashTrans.length) add('Sash Transom', 'RSC-74TM', sashTrans.map(Math.round), { inSash: true });
     if (zTm) add('Transom', 'RSC-74ZM', [zTm]);
     if (beadLens.length) add('Bead', 'RSB-35CB', groupLens(beadLens), { grouped: true });
     if (d.shape && d.shape !== 'rect') { const f = cuts.find(c => c.role === 'Frame'); if (f) { f.kg *= 1.3; f.metres *= 1.3; notes.push('Arc: profile and bead arc length + 30% bending wastage'); } }
     riM = Math.max(0, riM + (cuts.filter(c => c.role === 'Frame').reduce((a, c) => a + c.metres - 0.1 * c.lens.length, 0)));
   }
+  glassPanes = glassPanes.filter(g => !g.virtual);
   if (d.georgian) { const gl = glassPanes.reduce((a, g) => a + (g.w + g.h) / 1000, 0); add('Georgian bar', 'RSA-25GB', [Math.round(gl * 1000)]); }
   // ---- hardware choices (Hardware tab) and finish: replace default items by the chosen catalogue items ----
   { const m = {}; hw.forEach(h => { const k = h.name + '|' + h.rate; if (m[k]) m[k].qty += h.qty; else m[k] = { ...h } }); hw.length = 0; Object.values(m).forEach(h => hw.push(h)) }
