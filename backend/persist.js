@@ -2,13 +2,13 @@
 // encrypted, gzipped snapshot is kept in Vercel Blob (the storage built into Vercel). Every request first pulls a
 // newer snapshot if another instance wrote one; every successful write request pushes a new snapshot before replying.
 const zlib = require('zlib'), fs = require('fs'), crypto = require('crypto');
-const API = 'https://blob.vercel-storage.com';
+const API = 'https://vercel.com/api/blob';
 module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret = 'fenstraworks-auth', api = API }) {
   const key = crypto.createHash('sha256').update('snap:' + secret).digest(), P = 'fw/' + ns.replace(/[^a-z0-9]/gi, '') + '/';
   const H = { authorization: 'Bearer ' + token, 'x-api-version': '13', 'x-vercel-blob-access': 'private' };
   const chk = async (r, what) => { if (!r.ok) throw new Error('blob http ' + r.status + ' ' + what + ' ' + (await r.text()).slice(0, 160)); return r };
-  const list = async prefix => { const r = await chk(await fetch(api + '/?prefix=' + encodeURIComponent(prefix) + '&limit=1000', { headers: H }), 'list'); return (await r.json()).blobs || [] };
-  const put = async (name, body) => { const r = await chk(await fetch(api + '/' + name, { method: 'PUT', headers: { ...H, 'x-content-type': 'application/octet-stream', 'x-add-random-suffix': '0', 'x-cache-control-max-age': '0' }, body }), 'put'); return (await r.json()).url };
+  const list = async prefix => { const r = await chk(await fetch(api + '?prefix=' + encodeURIComponent(prefix) + '&limit=1000', { headers: H }), 'list'); return (await r.json()).blobs || [] };
+  const put = async (name, body) => { const r = await chk(await fetch(api + '/?pathname=' + encodeURIComponent(name), { method: 'PUT', headers: { ...H, 'x-content-type': 'application/octet-stream', 'x-add-random-suffix': '0', 'x-cache-control-max-age': '0' }, body }), 'put'); return (await r.json()).url };
   const del = async urls => { if (!urls.length) return; try { await chk(await fetch(api + '/delete', { method: 'POST', headers: { ...H, 'content-type': 'application/json' }, body: JSON.stringify({ urls }) }), 'delete') } catch (e) { console.error('blob delete:', e.message) } };
   const enc = buf => { const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', key, iv), out = Buffer.concat([c.update(buf), c.final()]); return Buffer.concat([iv, c.getAuthTag(), out]) };
   const dec = buf => { const d = crypto.createDecipheriv('aes-256-gcm', key, buf.subarray(0, 12)); d.setAuthTag(buf.subarray(12, 28)); return Buffer.concat([d.update(buf.subarray(28)), d.final()]) };
