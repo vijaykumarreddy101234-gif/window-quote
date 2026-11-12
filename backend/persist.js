@@ -5,7 +5,7 @@ const zlib = require('zlib'), fs = require('fs'), crypto = require('crypto');
 const API = 'https://blob.vercel-storage.com';
 module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret = 'fenstraworks-auth', api = API }) {
   const key = crypto.createHash('sha256').update('snap:' + secret).digest(), P = 'fw/' + ns.replace(/[^a-z0-9]/gi, '') + '/';
-  const H = { authorization: 'Bearer ' + token, 'x-api-version': '7' };
+  const H = { authorization: 'Bearer ' + token, 'x-api-version': '13', 'x-vercel-blob-access': 'private' };
   const chk = async (r, what) => { if (!r.ok) throw new Error('blob http ' + r.status + ' ' + what + ' ' + (await r.text()).slice(0, 160)); return r };
   const list = async prefix => { const r = await chk(await fetch(api + '/?prefix=' + encodeURIComponent(prefix) + '&limit=1000', { headers: H }), 'list'); return (await r.json()).blobs || [] };
   const put = async (name, body) => { const r = await chk(await fetch(api + '/' + name, { method: 'PUT', headers: { ...H, 'x-content-type': 'application/octet-stream', 'x-add-random-suffix': '0', 'x-cache-control-max-age': '0' }, body }), 'put'); return (await r.json()).url };
@@ -16,7 +16,7 @@ module.exports = function persist(db, { token, tmp = '/tmp', ns = 'main', secret
   let localV = 0, ready = null;
   async function latest() { const bs = await list(P + 'snap/'); let best = null; for (const b of bs) if (vOf(b) > (best ? vOf(best) : 0)) best = b; return best }
   async function pull(b) {
-    const raw = await (await chk(await fetch(b.url, { headers: H, cache: 'no-store' }), 'get')).arrayBuffer();
+    const raw = await (await chk(await fetch(b.url + (b.url.includes('?') ? '&' : '?') + 'cache=0', { headers: H, cache: 'no-store' }), 'get')).arrayBuffer();
     const buf = zlib.gunzipSync(dec(Buffer.from(raw))), f = tmp + '/remote-' + process.pid + '-' + Date.now() + '.db'; fs.writeFileSync(f, buf);
     db.exec(`ATTACH DATABASE '${f}' AS rm`);
     try {
